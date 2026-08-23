@@ -16,12 +16,10 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  delete (globalThis as { structure?: unknown }).structure;
 });
 
 function renderCommandBar() {
   const structure = loadFixture("example001.eds");
-  globalThis.structure = structure;
   const schemaStore = new LegacySchemaStore(structure);
   const situationPlanStore = new LegacySituationPlanStore(structure);
   const workspaceStore = new LocalWorkspaceStore();
@@ -29,6 +27,7 @@ function renderCommandBar() {
   const onOpenFile = vi.fn();
   const onSelectAll = vi.fn();
   const onClearSelection = vi.fn();
+  const historyAdapter = { undo: vi.fn(), redo: vi.fn() };
   const importBackground = vi.fn(async () => ({
     elementId: "SP_background",
     scaledToFit: false,
@@ -53,12 +52,10 @@ function renderCommandBar() {
         filename: "test.eds",
       }))}
       situationHistoryStore={new LegacyHistoryStatusStore(() => ({
-        canUndo: false,
+        canUndo: true,
         canRedo: false,
       }))}
-      onSituationMutation={() => {}}
-      onSituationUndo={() => {}}
-      onSituationRedo={() => {}}
+      historyAdapter={historyAdapter}
       onSave={onSave}
       onOpenFile={onOpenFile}
       situationAssetService={situationAssetService}
@@ -74,6 +71,7 @@ function renderCommandBar() {
   );
   return {
     addSituationOnlySymbol,
+    historyAdapter,
     importBackground,
     onOpenFile,
     onSelectAll,
@@ -86,7 +84,7 @@ function renderCommandBar() {
 
 describe("WorkspaceCommandBar", () => {
   it("keeps common commands fixed and switches contextual situation actions", () => {
-    const { onSave, situationPlanStore, workspaceStore } = renderCommandBar();
+    const { historyAdapter, onSave, situationPlanStore, workspaceStore } = renderCommandBar();
 
     expect(screen.getByRole("button", { name: "Ongedaan" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Opslaan" }));
@@ -94,6 +92,8 @@ describe("WorkspaceCommandBar", () => {
     expect(screen.queryByRole("button", { name: "Plattegrond" })).not.toBeInTheDocument();
 
     act(() => workspaceStore.commands.selectTab("situation"));
+    fireEvent.click(screen.getByRole("button", { name: "Ongedaan" }));
+    expect(historyAdapter.undo).toHaveBeenCalledWith("situation");
     expect(screen.getByRole("button", { name: "Plattegrond" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Verwijder" })).toBeDisabled();
 

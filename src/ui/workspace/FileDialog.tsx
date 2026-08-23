@@ -1,10 +1,10 @@
 import { useState } from "react";
-import type { LegacyFileService } from "../../application/FileService";
+import type { FileService } from "../../application/FileService";
 import type { SchemaStore } from "../../application/SchemaStore";
 import { useSchemaSnapshot } from "../useSchemaSnapshot";
 
 interface FileDialogProps {
-  readonly fileService: LegacyFileService;
+  readonly fileService: FileService;
   readonly schemaStore: SchemaStore;
   readonly onOpen: () => void;
   readonly onAppend: () => void;

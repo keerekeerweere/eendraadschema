@@ -4,7 +4,52 @@ import {
 } from "../legacy/persistence/EdsCodec";
 import { DEFAULT_MAIN_BOARD_ID, type DistributionBoard } from "../domain/DistributionBoard";
 import type { BoardLayout } from "../domain/BoardLayout";
-import { LegacyFileService } from "../application/FileService";
+import {
+    LegacyFileService,
+    type FileApiAdapter,
+    type FileService,
+    type ManualSaver,
+} from "../application/FileService";
+import type { Hierarchical_List } from "../Hierarchical_List";
+
+export interface LegacyDocumentLifecyclePort {
+    getDocument(): Hierarchical_List;
+    replaceDocument(document: Hierarchical_List): void;
+    redrawDocument(): void;
+    resetHistory(): void;
+    recordHistory(): void;
+    resetAutosave(): void;
+    markDocumentLoaded(askUserToSave: boolean): void;
+}
+
+let documentLifecyclePort: LegacyDocumentLifecyclePort | null = null;
+
+export function configureLegacyDocumentLifecycle(port: LegacyDocumentLifecyclePort | null): void {
+    documentLifecyclePort = port;
+}
+
+function getCurrentDocument(): Hierarchical_List {
+    if (!documentLifecyclePort) throw new Error("Document lifecycle is not configured.");
+    return documentLifecyclePort.getDocument();
+}
+
+function replaceCurrentDocument(document: Hierarchical_List): void {
+    if (!documentLifecyclePort) throw new Error("Document lifecycle is not configured.");
+    documentLifecyclePort.replaceDocument(document);
+}
+
+function redrawCurrentDocument(): void {
+    if (!documentLifecyclePort) throw new Error("Document lifecycle is not configured.");
+    documentLifecyclePort.redrawDocument();
+}
+
+function resetDocumentHistory(): void {
+    documentLifecyclePort?.resetHistory();
+}
+
+function recordDocumentHistory(): void {
+    documentLifecyclePort?.recordHistory();
+}
 
 export class importExportUsingFileAPI {
 
@@ -13,7 +58,7 @@ export class importExportUsingFileAPI {
     filename: string;
     lastsaved: string;
 
-    constructor() {
+    constructor(private readonly getDocument: () => Hierarchical_List = () => getCurrentDocument()) {
         this.clear();
         //this.updateButtons();
     }
@@ -50,7 +95,7 @@ export class importExportUsingFileAPI {
         const contents = await file.text();
 
         this.filename = file.name;
-        globalThis.structure.properties.filename = file.name;
+        this.getDocument().properties.filename = file.name;
 
         this.setSaveNeeded(false);
 
@@ -61,7 +106,7 @@ export class importExportUsingFileAPI {
 
     async saveAs(content: string) {
         const options = {
-            suggestedName: globalThis.structure.properties.filename,
+            suggestedName: this.getDocument().properties.filename,
             types: [{
                 description: 'Eendraadschema (.eds)',
                 accept: {'application/eds': ['.eds']},
@@ -79,7 +124,7 @@ export class importExportUsingFileAPI {
         await writable.close();
 
         this.filename = handle.name;
-        globalThis.structure.properties.filename = handle.name;
+        this.getDocument().properties.filename = handle.name;
 
         this.setSaveNeeded(false);
 
@@ -94,48 +139,55 @@ export class importExportUsingFileAPI {
 /** Single React-facing file adapter. The legacy file page and any future
  *  React file UI share it; it preserves the File System Access flow, the
  *  download fallback and manual autosave bookkeeping. */
-export const fileService = new LegacyFileService({
-    getDocument: () => globalThis.structure,
-    getFileApi: () => globalThis.fileAPIobj,
+export function createFileService(
+  getDocument: () => ReturnType<typeof structureFromJson>,
+  getFileApi: () => FileApiAdapter,
+  getManualSaver: () => ManualSaver | undefined,
+  afterExport: (payload: string) => void = () => {},
+): LegacyFileService {
+  return new LegacyFileService({
+    getDocument,
+    getFileApi,
     isFileApiAvailable: () => (window as any).showOpenFilePicker !== undefined,
-    getManualSaver: () => globalThis.autoSaver,
+    getManualSaver,
     downloadFallback: (content, filename) => download_by_blob(content, filename, 'data:text/eds;charset=utf-8'),
-    afterExport: (payload) => globalThis.propUpload(payload),
-});
+    afterExport,
+  });
+}
 
 /**
  * Callback functie voor de legacy filepicker als de file API niet beschikbaar is in de browser.
  * @param event filepicker click event
  */
-globalThis.importjson = (event) => {
-    var input = event.target;
+export function importDocumentFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
     var reader = new FileReader();
-    var text:string = "";
 
     reader.onload = function(){
         EDStoStructure(reader.result.toString());
-        if (globalThis.structure.sitplan) globalThis.structure.sitplan.setActivePage(1);
+        getCurrentDocument().sitplan?.setActivePage(1);
     };
 
-    reader.readAsText(input.files[0]);
-};
+    const file = input.files?.[0];
+    if (file) reader.readAsText(file);
+}
 
 /**
  * Callback functie voor de legacy filepicker om een schema toe te voegen aan een reeds bestaand schema.
  * Dit doen we altijd via de legacy filepicker, aangezien dit toch een read-only situatie is.
  * @param event filepicker click event
  */
-globalThis.appendjson = function(event) {
-    var input = event.target;
+export function appendDocumentFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
     var reader = new FileReader();
-    var text:string = "";
 
     reader.onload = function(){
         importToAppend(reader.result.toString());
     };
 
-    reader.readAsText(input.files[0]);
-};
+    const file = input.files?.[0];
+    if (file) reader.readAsText(file);
+}
 
 /**
  * Wordt aangeroepen wanneer een gebruiker een bestand wil openen. Controleert of de fileAPI beschikbaar is in de browser.
@@ -143,11 +195,11 @@ globalThis.appendjson = function(event) {
  * 
  * @returns {Promise<void>} Een promise die wordt opgelost wanneer het bestand is geladen en verwerkt.
  */
-globalThis.loadClicked = async () => {
+export async function openDocumentPicker(fileService: FileService): Promise<void> {
     if ((window as any).showOpenFilePicker) { // Use fileAPI
         let data = await fileService.openDocumentText();
         EDStoStructure(data);
-        if (globalThis.structure.sitplan) globalThis.structure.sitplan.setActivePage(1);
+        getCurrentDocument().sitplan?.setActivePage(1);
     } else { // Legacy
         document.getElementById('importfile').click();
         (document.getElementById('importfile') as HTMLInputElement).value = "";
@@ -161,29 +213,17 @@ globalThis.loadClicked = async () => {
  * Vraagt om een EDS bestand op de machine te kiezen en voegt de inhoud toe aan het reeds geopende schema.
  * We gebruiken hier bewust niet de fileAPI aangezien die reeds gebruikt wordt voor het reeds geopende schema.
  */
-globalThis.importToAppendClicked = async () => {
+export async function openAppendDocumentPicker(): Promise<void> {
     document.getElementById('appendfile').click();
     (document.getElementById('appendfile') as HTMLInputElement).value = "";
-}
-
-
-/**
- * Exporteert de huidige structuur naar een bestand in het EDS-formaat.
- * @param {boolean} saveAs - Indien true, wordt de gebruiker gevraagd waar het bestand moet worden opgeslagen; anders wordt het bestand opgeslagen onder de bekende bestandsnaam.
- */
-globalThis.exportjson = (saveAs: boolean = true) => { // Indien de boolean false is en de file API is geïnstalleerd, wordt een normale opslag uitgevoerd (bekende bestandsnaam)
-    fileService.saveDocument(saveAs).catch((error) => {
-        // A dismissed file picker rejects; that is not an application error.
-        if ((error as { name?: string }).name !== "AbortError") console.error(error);
-    });
 }
 
 /** @deprecated Import from legacy/persistence/EdsCodec in UI-independent code. */
 export const json_to_structure = structureFromJson;
 
 export function loadFromText(text: string, version: number, redraw = true) {
-    globalThis.structure = structureFromJson(text, globalThis.structure, version);
-    if (redraw == true) globalThis.topMenu.selectMenuItemByName('Eéndraadschema'); // Ga naar het bewerken scherm, dat zal automatisch voor hertekenen zorgen.
+    replaceCurrentDocument(structureFromJson(text, getCurrentDocument(), version));
+    if (redraw) redrawCurrentDocument();
 }
 
 /**
@@ -207,7 +247,7 @@ export const EDStoJson = decodeEds;
 
 export function EDStoStructure(mystring: string, redraw = true, askUserToSave = false) {
 
-    if (globalThis.autoSaver) globalThis.autoSaver.reset();
+    documentLifecyclePort?.resetAutosave();
 
     let JSONdata = decodeEds(mystring);
     
@@ -215,16 +255,10 @@ export function EDStoStructure(mystring: string, redraw = true, askUserToSave = 
     loadFromText(JSONdata.text, JSONdata.version, redraw);
 
     // Clear the undo stack and push this one on top
-    globalThis.undostruct.clear();
-    globalThis.undostruct.store();
+    resetDocumentHistory();
+    recordDocumentHistory();
 
     // Scroll to top left for the SVG and HTML, this can only be done at the end because "right col" has to actually be visible
-    const leftelem = document.getElementById("left_col");
-    if (leftelem != null) {
-      leftelem.scrollTop = 0;
-      leftelem.scrollLeft = 0;
-    }
-    
     const rightelem = document.getElementById("right_col");
     if (rightelem != null) {
       rightelem.scrollTop = 0;
@@ -232,11 +266,7 @@ export function EDStoStructure(mystring: string, redraw = true, askUserToSave = 
     }
 
     // Make a manual save in the autoSaver
-    if (globalThis.autoSaver && !askUserToSave) globalThis.autoSaver.saveManually();
-    if (askUserToSave) {
-        globalThis.autoSaver.forceHasChangesSinceLastManualSave();
-        globalThis.structure.updateRibbon();
-    } 
+    documentLifecyclePort?.markDocumentLoaded(askUserToSave);
 
 }
 
@@ -341,14 +371,11 @@ function createAppendedBoardIdMap(
     return { targetMainBoardId, newIdByOldId };
 }
 
-function importToAppend(mystring: string, redraw = true) {
-    let JSONdata = decodeEds(mystring);
-    let structureToAppend = structureFromJson(JSONdata.text, null, JSONdata.version);
-
+export function appendStructure(target: ReturnType<typeof structureFromJson>, structureToAppend: ReturnType<typeof structureFromJson>): void {
     //get the Maximal ID in array structure.id and call it maxID
     let maxID = 0;
-    for (let i = 0; i < globalThis.structure.id.length; i++) {
-        if (globalThis.structure.id[i] > maxID) maxID = globalThis.structure.id[i];
+    for (let i = 0; i < target.id.length; i++) {
+        if (target.id[i] > maxID) maxID = target.id[i];
     }
     
     //then increase the ID's in structureToAppend accordingly
@@ -359,72 +386,77 @@ function importToAppend(mystring: string, redraw = true) {
             structureToAppend.data[i].parent += maxID;
         }
     }
-    globalThis.structure.curid += structureToAppend.curid;
+    target.curid += structureToAppend.curid;
 
     //then merge information for the eendraadschema
-    globalThis.structure.length = globalThis.structure.length + structureToAppend.length;
-    globalThis.structure.active = globalThis.structure.active.concat(structureToAppend.active);
-    globalThis.structure.id = globalThis.structure.id.concat(structureToAppend.id);
-    globalThis.structure.data = globalThis.structure.data.concat(structureToAppend.data);
+    target.length = target.length + structureToAppend.length;
+    target.active = target.active.concat(structureToAppend.active);
+    target.id = target.id.concat(structureToAppend.id);
+    target.data = target.data.concat(structureToAppend.data);
 
     //then merge secondary distribution boards; the appended main board's items simply
     //become extra top-level items of the current main board
-    const targetBoards = globalThis.structure.boards;
-    globalThis.structure.boardLayouts = mergeAppendedBoardLayouts(
-        globalThis.structure.boardLayouts,
+    const targetBoards = target.boards;
+    target.boardLayouts = mergeAppendedBoardLayouts(
+        target.boardLayouts,
         structureToAppend.boardLayouts,
         targetBoards,
         structureToAppend.boards,
         maxID,
     );
-    globalThis.structure.boards = mergeAppendedBoards(
+    target.boards = mergeAppendedBoards(
         targetBoards, structureToAppend.boards, maxID);
 
     //update the sourcelist
-    globalThis.structure.data.forEach((item) => {
-        item.sourcelist = globalThis.structure;
+    target.data.forEach((item) => {
+        item.sourcelist = target;
     });
 
     //then set the printer to autopage
-    globalThis.structure.print_table.enableAutopage = true;
+    target.print_table.enableAutopage = true;
 
     //then merge the situation plans but only if both exist
-    if (globalThis.structure.sitplan != null) {
+    if (target.sitplan != null) {
         if (structureToAppend.sitplan != null) {
 
             // Eerst oude situationplanview leeg maken, anders blijven oude div's hangen
-            if (globalThis.structure.sitplanview != null) globalThis.structure.sitplanview.dispose(); 
+            if (target.sitplanview != null) target.sitplanview.dispose();
 
             // dan nieuw situationplan maken en bij openen van het schema zal automatisch een nieuw situationplanview gecreëerd wordne
-            globalThis.structure.sitplanjson = globalThis.structure.sitplan.toJsonObject();
+            target.sitplanjson = target.sitplan.toJsonObject();
             structureToAppend.sitplanjson = structureToAppend.sitplan.toJsonObject();
             
             for (let i = 0; i < structureToAppend.sitplanjson.elements.length; i++) {
                 if (structureToAppend.sitplanjson.elements[i].electroItemId != null)
                     structureToAppend.sitplanjson.elements[i].electroItemId += maxID;
-                structureToAppend.sitplanjson.elements[i].page += globalThis.structure.sitplanjson.numPages;
+                structureToAppend.sitplanjson.elements[i].page += target.sitplanjson.numPages;
             }
 
-            if ( (globalThis.structure.sitplanjson != null) && (structureToAppend.sitplanjson != null) ) {
-                globalThis.structure.sitplanjson.numPages += structureToAppend.sitplanjson.numPages;
-                globalThis.structure.sitplanjson.elements = globalThis.structure.sitplanjson.elements.concat(structureToAppend.sitplanjson.elements);
+            if ( (target.sitplanjson != null) && (structureToAppend.sitplanjson != null) ) {
+                target.sitplanjson.numPages += structureToAppend.sitplanjson.numPages;
+                target.sitplanjson.elements = target.sitplanjson.elements.concat(structureToAppend.sitplanjson.elements);
             }
-            globalThis.structure.sitplan.fromJsonObject(globalThis.structure.sitplanjson);
+            target.sitplan.fromJsonObject(target.sitplanjson);
             
-            globalThis.structure.sitplanjson = null;
+            target.sitplanjson = null;
         }
     }
     
-    globalThis.structure.reSort();
-    
-    //then remove the pointer from structureToAppend and let the garbage collector do its work
-    structureToAppend = null;   
+    target.reSort();
+}
+
+function importToAppend(mystring: string, redraw = true) {
+    const JSONdata = decodeEds(mystring);
+    const structureToAppend = structureFromJson(JSONdata.text, null, JSONdata.version);
+    appendStructure(getCurrentDocument(), structureToAppend);
 
     //redraw if needed
-    if (redraw) globalThis.topMenu.selectMenuItemByName('Eéndraadschema');
+    if (redraw) {
+      redrawCurrentDocument();
+    }
 
     // Store only after having redrawn, anders worden we naar de print-pagina gestuurd bij undo
-    globalThis.undostruct.store();
+    recordDocumentHistory();
 }
 
 /** FUNCTION download_by_blob

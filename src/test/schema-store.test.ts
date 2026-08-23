@@ -52,6 +52,50 @@ describe("LegacySchemaStore", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it("creates a configured circuit beneath its board as one undoable revision", () => {
+    const { store, boardId } = createStore();
+
+    const circuitId = store.commands.addCircuit("main", {
+      nameMode: "manueel",
+      name: "Keuken",
+      protection: "automatisch",
+      poleCount: "2",
+      amperage: "20",
+      hasCable: true,
+      cableType: "XVB Cca 3G2,5",
+    });
+
+    expect(store.getSnapshot().revision).toBe(1);
+    expect(store.getSnapshot().document.getItem(circuitId)).toMatchObject({
+      type: "Kring",
+      parentId: boardId,
+      label: "Kring Keuken",
+    });
+    expect(store.getSnapshot().properties.getCircuit(circuitId)).toMatchObject({
+      name: "Keuken",
+      amperage: "20",
+      cableType: "XVB Cca 3G2,5",
+    });
+    expect(store.getSnapshot().placementTasks).toEqual([
+      expect.objectContaining({ itemId: circuitId, destination: "board" }),
+    ]);
+
+    store.commands.undo();
+    expect(store.getSnapshot().document.getItem(circuitId)).toBeUndefined();
+  });
+
+  it("resolves the Bord node when main-board metadata starts at Aansluiting", () => {
+    const structure = new Hierarchical_List();
+    const connection = structure.addItem("Aansluiting");
+    const board = structure.createItem("Bord");
+    structure.insertChildAfterId(board, connection.id);
+    const store = new LegacySchemaStore(structure);
+
+    const circuitId = store.commands.addCircuit("main", { nameMode: "manueel", name: "Wasplaats" });
+
+    expect(store.getSnapshot().document.getItem(circuitId)?.parentId).toBe(board.id);
+  });
+
   it("inserts an item atomically between an existing parent and child", () => {
     const { store, boardId } = createStore();
     const circuitId = store.commands.addItem(boardId, "Kring");

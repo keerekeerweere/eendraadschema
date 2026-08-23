@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 async function loadExample(page: Page, example: 0 | 1): Promise<void> {
   await page.goto("/");
   await expect(page.getByText("Welkom op ééndraadschema")).toBeVisible();
-  await page.locator(`button[onclick="load_example(${example})"]`).click();
+  await page.locator(`#start-example-${example}`).click();
   await expect(page.getByRole("navigation", { name: "Elektrische hiërarchie" })).toBeVisible();
 }
 
@@ -13,6 +13,86 @@ test("loads an example into the React editor with a live SVG preview", async ({ 
   await expect(page.locator("#react-hierarchy-root [data-hierarchy-item-id]").first()).toBeVisible();
   await expect(page.locator("#right_col_inner #EDS svg")).toBeVisible();
   await expect(page.getByRole("contentinfo", { name: "Statusbalk van de editor" })).toBeVisible();
+  await expect(page.locator("#ribbon")).toBeHidden();
+  await expect.poll(() => page.evaluate(() => {
+    const canvasWidth = document.getElementById("canvas_2col")?.getBoundingClientRect().width ?? 0;
+    const viewportWidth = document.getElementById("right_col")?.getBoundingClientRect().width ?? 0;
+    return Math.abs(canvasWidth - viewportWidth);
+  })).toBeLessThanOrEqual(1);
+});
+
+test("keeps new-document, documentation, and contact flows inside React dialogs", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Fasen").selectOption("4");
+  await page.getByLabel("Hoofdzekering (A)").fill("40");
+  await page.getByRole("button", { name: "Start met een leeg schema" }).click();
+  await expect(page.getByRole("heading", { name: "Werk per kring, niet per tekening" })).toBeVisible();
+
+  await page.getByText("Hulp", { exact: true }).click();
+  await page.getByRole("button", { name: "Documentatie" }).click();
+  await expect(page.getByRole("dialog", { name: "Documentatie" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open handleiding" })).toHaveCount(2);
+  await page.getByRole("button", { name: "Sluiten" }).click();
+
+  await page.getByText("Hulp", { exact: true }).click();
+  await page.getByRole("button", { name: "Info en contact" }).click();
+  await expect(page.getByRole("dialog", { name: "Info en contact" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open de online versie" })).toBeVisible();
+});
+
+test("keeps the workspace compact with adjustable sidebars and a placement queue", async ({ page }) => {
+  await loadExample(page, 0);
+
+  const hierarchy = page.getByRole("navigation", { name: "Elektrische hiërarchie" });
+  await expect(hierarchy.locator("select[aria-label^='Type van']")).toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Zoeken in het schema" }).fill("Contactdoos");
+  await page.getByRole("search").getByRole("button").first().click();
+  const selectedType = hierarchy.locator("select[aria-label^='Type van']");
+  await expect(selectedType).toHaveCount(1);
+  await expect(selectedType.locator("optgroup")).not.toHaveCount(0);
+
+  const leftResizeHandle = page.getByRole("separator", { name: "Breedte van navigatie aanpassen" });
+  await leftResizeHandle.press("ArrowRight");
+  await expect(page.locator("#react-workspace-sidebar")).toHaveCSS("width", "328px");
+  await page.getByRole("button", { name: "Navigatie inklappen" }).click();
+  await expect.poll(() => page.locator("#react-workspace-sidebar").evaluate(
+    element => element.getBoundingClientRect().width,
+  )).toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Navigatie tonen" }).click();
+  await expect(page.locator("#react-workspace-sidebar")).toHaveCSS("width", "328px");
+
+  await page.getByRole("navigation", { name: "Werkruimteweergave" })
+    .getByRole("button", { name: "Situatieschema" }).click();
+  const helpDialogOk = page.getByRole("button", { name: "OK" });
+  if (await helpDialogOk.isVisible()) await helpDialogOk.click();
+  const placementQueue = page.getByRole("region", { name: "Nog te plaatsen" });
+  await expect(placementQueue).toContainText(/van \d+ veldsymbolen geplaatst/);
+  await expect(page.getByLabel("Kring")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Plaats" }).first()).toBeVisible();
+});
+
+test("creates a circuit through the dossier under the selected board", async ({ page }) => {
+  await loadExample(page, 0);
+
+  const workspaceTabs = page.getByRole("navigation", { name: "Werkruimteweergave" });
+  await workspaceTabs.getByRole("button", { name: "Dossier" }).click();
+  await expect(page.locator("#react-workspace-sidebar")).toHaveClass(/hidden/);
+  await expect(page.locator("#properties_col")).toHaveClass(/hidden/);
+
+  await page.getByRole("button", { name: "+ Kring toevoegen" }).click();
+  const dialog = page.getByRole("dialog", { name: "Basisgegevens instellen" });
+  await expect(dialog.getByLabel("Verdeelbord")).toHaveValue("main");
+  await dialog.getByLabel("Kringnaam").fill("Wasplaats");
+  await dialog.getByLabel("Stroom (A)").fill("16");
+  await dialog.getByLabel("Kabeltype").fill("XVB Cca 3G2,5");
+  await dialog.getByRole("button", { name: "Kring aanmaken" }).click();
+
+  await expect(workspaceTabs.getByRole("button", { name: "Eéndraadschema" })).toHaveAttribute("aria-current", "page");
+  const selectedRow = page.locator("#react-hierarchy-root [aria-current='true']");
+  await expect(selectedRow).toContainText("Kring Wasplaats");
+  const properties = page.locator("#react-properties-root");
+  await expect(properties.getByLabel("Stroom (A)")).toHaveValue("16");
+  await expect(properties.getByLabel("Kabeltype")).toHaveValue("XVB Cca 3G2,5");
 });
 
 test("adds components at branch ends and between drawn components", async ({ page }) => {
@@ -113,31 +193,58 @@ test("unified workspace links hierarchy items to situation-plan placements", asy
   const workspaceTabs = page.getByRole("navigation", { name: "Werkruimteweergave" });
   const hierarchy = page.getByRole("navigation", { name: "Elektrische hiërarchie" });
   await expect(workspaceTabs.getByRole("button", { name: "Eéndraadschema" })).toHaveAttribute("aria-current", "page");
-  await expect(page.locator("#minitabs li:visible").filter({ hasText: "Eéndraadschema" })).toHaveCount(0);
-  await expect(page.locator("#minitabs li:visible").filter({ hasText: "Situatieschema" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Applicatiemenu" }).getByText("Eéndraadschema", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Applicatiemenu" }).getByText("Situatieschema", { exact: true })).toHaveCount(0);
 
   await page.getByRole("searchbox", { name: "Zoeken in het schema" }).fill("Lichtpunt");
   await page.getByRole("search").getByRole("button").first().click();
-  const links = page.getByRole("region", { name: "Koppelingen met situatieschema" });
-  await expect(links).toContainText("0 plaatsingen");
+  await page.getByRole("navigation", { name: "Inspecteursecties" })
+    .getByRole("button", { name: "Koppelingen" }).click();
+  const links = page.getByRole("region", { name: "Contextinspecteur" });
+  await expect(links.getByRole("button", { name: "Situatieschema · symbool plaatsen" })).toBeVisible();
 
-  await links.getByRole("button", { name: "Plaats symbool" }).click();
+  await links.getByRole("button", { name: "Situatieschema · symbool plaatsen" }).click();
   await expect(workspaceTabs.getByRole("button", { name: "Situatieschema" })).toHaveAttribute("aria-current", "page");
-  await expect(hierarchy).toBeVisible();
-  await expect(links).toContainText("1 plaatsing");
+  await expect(page.getByRole("heading", { name: "Nog te plaatsen" })).toBeVisible();
 
   const helpDialogOk = page.getByRole("button", { name: "OK" });
   if (await helpDialogOk.isVisible()) await helpDialogOk.click();
-  await links.getByRole("button", { name: /Toon plaatsing 1/ }).click();
   await expect(page.locator("#paper .box.selected")).toBeVisible();
   const placementInspector = page.getByRole("region", { name: "Eigenschappen van situatiesymbool" });
   const rotation = placementInspector.getByLabel("Rotatie (°)");
   await rotation.fill("90");
   await rotation.blur();
   await expect(rotation).toHaveValue("90");
-  await expect.poll(() => page.evaluate(() => (
-    globalThis.situationPlanStore.getSnapshot().elements[0]?.rotation
-  ))).toBe(90);
+
+  const selectedBox = page.locator("#paper .box.selected");
+  const xPosition = placementInspector.getByLabel("X");
+  const yPosition = placementInspector.getByLabel("Y");
+  const beforeDrag = {
+    x: Number(await xPosition.inputValue()),
+    y: Number(await yPosition.inputValue()),
+  };
+  const bounds = await selectedBox.boundingBox();
+  expect(bounds).not.toBeNull();
+  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds!.x + bounds!.width / 2 + 24, bounds!.y + bounds!.height / 2 + 16);
+  await page.mouse.up();
+  await expect.poll(async () => Number(await xPosition.inputValue())).toBeGreaterThan(beforeDrag.x);
+  await expect.poll(async () => Number(await yPosition.inputValue())).toBeGreaterThan(beforeDrag.y);
+  const afterDrag = {
+    x: Number(await xPosition.inputValue()),
+    y: Number(await yPosition.inputValue()),
+  };
+  if (await helpDialogOk.isVisible()) await helpDialogOk.click();
+
+  const commandBar = page.getByRole("toolbar", { name: "Werkruimtecommando's" });
+  await commandBar.getByRole("button", { name: "Ongedaan", exact: true }).click();
+  await expect.poll(async () => Number(await xPosition.inputValue())).toBe(beforeDrag.x);
+  await expect.poll(async () => Number(await yPosition.inputValue())).toBe(beforeDrag.y);
+
+  await commandBar.getByRole("button", { name: "Opnieuw", exact: true }).click();
+  await expect.poll(async () => Number(await xPosition.inputValue())).toBe(afterDrag.x);
+  await expect.poll(async () => Number(await yPosition.inputValue())).toBe(afterDrag.y);
 });
 
 test("adds a secondary board, shows breadcrumbs, and deletes it again", async ({ page }) => {
@@ -177,6 +284,8 @@ test("situation plan React controls manage pages", async ({ page }) => {
   await loadExample(page, 0);
   await page.getByRole("navigation", { name: "Werkruimteweergave" })
     .getByRole("button", { name: "Situatieschema" }).click();
+  await expect(page.locator("#ribbon")).toBeHidden();
+  await expect(page.getByRole("toolbar", { name: "Werkruimtecommando's" })).toBeVisible();
   const helpDialogOk = page.getByRole("button", { name: "OK" });
   if (await helpDialogOk.isVisible()) await helpDialogOk.click();
 
@@ -198,6 +307,8 @@ test("situation plan React controls manage pages", async ({ page }) => {
   await expect(symbolDialog).toBeHidden();
   await expect(paper.locator(".box")).toHaveCount(initialElementCount + 2);
 
+  await controls.getByRole("button", { name: "Passend" }).click();
+  await expect.poll(() => paper.evaluate((element) => element.style.transform)).toMatch(/^scale\([\d.]+\)$/);
   const fittedTransform = await paper.evaluate((element) => element.style.transform);
   await controls.getByRole("button", { name: "Situatieschema inzoomen" }).click();
   await expect.poll(() => paper.evaluate((element) => element.style.transform)).not.toBe(fittedTransform);
@@ -221,7 +332,7 @@ test("situation plan React controls manage pages", async ({ page }) => {
 test("print page renders a preview through the print adapter", async ({ page }) => {
   await loadExample(page, 1);
 
-  await page.locator("#minitabs").getByText("Print", { exact: true }).click();
+  await page.getByRole("navigation", { name: "Applicatiemenu" }).getByRole("button", { name: "Print" }).click();
   const printDialog = page.getByRole("dialog", { name: "Afdrukken" });
   await expect(printDialog).toBeVisible();
   await expect(printDialog.getByRole("button", { name: "PDF genereren" })).toBeVisible();

@@ -1,7 +1,9 @@
-export type WorkspaceTab = "schema" | "situation" | "board";
-export type WorkspaceDialog = "file" | "print";
+/** A dossier is a working view, not an additional statutory drawing. */
+export type WorkspaceTab = "dossier" | "schema" | "situation" | "board";
+export type WorkspaceDialog = "new" | "file" | "print" | "documentation" | "about";
 
 export interface WorkspaceSnapshot {
+  readonly isActive: boolean;
   readonly activeTab: WorkspaceTab;
   readonly selectedSituationElementId: string | null;
   readonly selectedSituationElementIds: readonly string[];
@@ -10,6 +12,7 @@ export interface WorkspaceSnapshot {
 
 export interface WorkspaceCommands {
   selectTab(tab: WorkspaceTab): void;
+  leaveWorkspace(): void;
   selectSituationElement(elementId: string | null): void;
   selectSituationElements(elementIds: readonly string[], primaryElementId?: string | null): void;
   openDialog(dialog: WorkspaceDialog): void;
@@ -24,7 +27,8 @@ export interface WorkspaceStore {
 
 export class LocalWorkspaceStore implements WorkspaceStore {
   private readonly listeners = new Set<() => void>();
-  private activeTab: WorkspaceTab = "schema";
+  private isActive = false;
+  private activeTab: WorkspaceTab = "dossier";
   private selectedSituationElementId: string | null = null;
   private selectedSituationElementIds: readonly string[] = Object.freeze([]);
   private activeDialog: WorkspaceDialog | null = null;
@@ -32,6 +36,7 @@ export class LocalWorkspaceStore implements WorkspaceStore {
 
   readonly commands: WorkspaceCommands = Object.freeze({
     selectTab: this.selectTab.bind(this),
+    leaveWorkspace: this.leaveWorkspace.bind(this),
     selectSituationElement: this.selectSituationElement.bind(this),
     selectSituationElements: this.selectSituationElements.bind(this),
     openDialog: this.openDialog.bind(this),
@@ -48,8 +53,16 @@ export class LocalWorkspaceStore implements WorkspaceStore {
   }
 
   private selectTab(tab: WorkspaceTab): void {
-    if (tab === this.activeTab) return;
+    if (tab === this.activeTab && this.isActive) return;
+    this.isActive = true;
     this.activeTab = tab;
+    this.snapshot = this.createSnapshot();
+    for (const listener of this.listeners) listener();
+  }
+
+  private leaveWorkspace(): void {
+    if (!this.isActive) return;
+    this.isActive = false;
     this.snapshot = this.createSnapshot();
     for (const listener of this.listeners) listener();
   }
@@ -93,6 +106,7 @@ export class LocalWorkspaceStore implements WorkspaceStore {
 
   private createSnapshot(): WorkspaceSnapshot {
     return Object.freeze({
+      isActive: this.isActive,
       activeTab: this.activeTab,
       selectedSituationElementId: this.selectedSituationElementId,
       selectedSituationElementIds: this.selectedSituationElementIds,

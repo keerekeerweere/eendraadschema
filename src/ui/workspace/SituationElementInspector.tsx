@@ -12,7 +12,6 @@ import { useWorkspaceSnapshot } from "../useWorkspaceSnapshot";
 interface SituationElementInspectorProps {
   readonly situationPlanStore: SituationPlanStore;
   readonly workspaceStore: WorkspaceStore;
-  readonly onMutation: () => void;
 }
 
 interface PlacementDraft {
@@ -47,14 +46,12 @@ interface MultiPlacementInspectorProps {
   readonly elements: readonly SituationPlanElementSnapshot[];
   readonly pageCount: number;
   readonly situationPlanStore: SituationPlanStore;
-  readonly onMutation: () => void;
 }
 
 function MultiPlacementInspector({
   elements,
   pageCount,
   situationPlanStore,
-  onMutation,
 }: MultiPlacementInspectorProps) {
   const [error, setError] = useState("");
   const [scalePercent, setScalePercent] = useState("");
@@ -68,7 +65,6 @@ function MultiPlacementInspector({
     }));
     try {
       situationPlanStore.commands.updateElements(updates);
-      onMutation();
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "De plaatsingen konden niet worden aangepast.");
@@ -88,7 +84,6 @@ function MultiPlacementInspector({
   function runSelectionCommand(command: () => void) {
     try {
       command();
-      onMutation();
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "De selectie kon niet worden aangepast.");
@@ -237,7 +232,6 @@ function MultiPlacementInspector({
 export function SituationElementInspector({
   situationPlanStore,
   workspaceStore,
-  onMutation,
 }: SituationElementInspectorProps) {
   const situation = useSituationPlanSnapshot(situationPlanStore);
   const workspace = useWorkspaceSnapshot(workspaceStore);
@@ -262,7 +256,6 @@ export function SituationElementInspector({
         elements={selectedElements}
         pageCount={situation.pageCount}
         situationPlanStore={situationPlanStore}
-        onMutation={onMutation}
       />
     );
   }
@@ -282,7 +275,6 @@ export function SituationElementInspector({
   function commit(changes: SituationPlanElementChanges) {
     try {
       situationPlanStore.commands.updateElement(element.id, changes);
-      onMutation();
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "De plaatsing kon niet worden aangepast.");
@@ -344,7 +336,6 @@ export function SituationElementInspector({
             onClick={() => {
               try {
                 situationPlanStore.commands.duplicateElements([element.id]);
-                onMutation();
                 setError("");
               } catch (caught) {
                 setError(caught instanceof Error ? caught.message : "De plaatsing kon niet worden gedupliceerd.");

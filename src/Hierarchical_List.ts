@@ -224,7 +224,7 @@ export class Hierarchical_List {
         this.properties = new Properties();
         this.curid = 1;
         this.mode = "edit";
-        this.sitplan = new SituationPlan();
+        this.sitplan = new SituationPlan(this);
         this.boards = [createDefaultMainBoard([])];
         this.boardLayouts = [];
         this.placementTasks = [];
@@ -729,11 +729,7 @@ export class Hierarchical_List {
         };
     };
 
-    updateRibbon() {
-        if (this.properties.currentView === '2col') {
-            document.getElementById("ribbon")?.replaceChildren();
-        }
-    }
+    /** @deprecated React owns the complete workspace command bar. */
 
     voegAttributenToeAlsNodigEnReSort() {
 

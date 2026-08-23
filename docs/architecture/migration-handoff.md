@@ -1,6 +1,6 @@
 # React migration handoff
 
-Last updated: 13 August 2026
+Last updated: 17 August 2026
 
 This is the operational memory for continuing the incremental React migration. Read this file first in a future session, then use `current-architecture.md` for the detailed historical inventory.
 
@@ -19,15 +19,16 @@ This is the operational memory for continuing the incremental React migration. R
 ## Current architectural boundary
 
 ```text
-React editor UI
-  -> SchemaCommands
-  -> LegacySchemaStore (single authoritative document + history)
-  -> Hierarchical_List and concrete electrical classes
-  -> EDS persistence and existing SVG/print renderers
+React workspace UI
+  -> WorkspaceStore + LocalEditorStore
+  -> SchemaStore / SituationPlanStore commands
+  -> WorkspaceViewAdapter / WorkspaceHistoryAdapter / SituationCanvasAdapter
+  -> DocumentHost
+  -> Hierarchical_List compatibility model
 
-Editor-only state
-  -> LocalEditorStore
-  -> active board, selection and expanded nodes
+EDS / autosave / SVG / PDF
+  -> FileService / PrintService / SvgExportService
+  -> DocumentHost
 ```
 
 React must never mutate `Hierarchical_List.data` or an item `props` bag directly. New UI actions go through `SchemaCommands`. The electrical classes must remain free of React, JSX, hooks, DOM elements, CSS names and interactive HTML.
@@ -61,13 +62,34 @@ React must never mutate `Hierarchical_List.data` or an item `props` bag directly
 - `Bordindeling` is a fully manual DIN-rail editor. Rail capacity and every module's rail, start position and width are explicit; commands reject overlap, overflow, cross-board placement and deletion of occupied rails.
 - Cross-editor linking is bidirectional. Selecting an electrical hierarchy item shows all linked situation-plan placements and can create or reveal one; selecting a linked situation-plan symbol selects its electrical item in the permanent hierarchy.
 - The permanent right inspector is contextual: electrical properties in the one-line tab, placement properties in the situation tab and module placement in the board tab. Situation placements can be edited without a modal for page, coordinates, scale, rotation, label size, address mode/location and lock state.
-- React owns situation movement, rotation, locking, deletion, duplication, alignment and distribution commands, including keyboard handling. The legacy canvas remains the authoritative renderer and selection source but its edit popup and context menu are suppressed.
+- React owns situation movement, rotation, locking, deletion, duplication, alignment and distribution commands, including keyboard handling. The legacy canvas remains the authoritative renderer, pointer-drag and selection source; its duplicate keyboard path, context menu and edit popups were deleted.
 - React-owned file and print dialogs replace the imperative pages. They use the existing file/print application services and renderers, including save-as/open/append, compression settings, print settings, preview, SVG/PDF export and automatic or manual pagination.
 - Situation multi-selection is mirrored from the canvas into `WorkspaceStore`, preserving a primary placement for cross-editor linking. Shift-selected symbols receive a batch inspector for relative movement, rotation, page, scale and lock state; batch changes validate before one atomic store publication and one undo checkpoint. The command bar exposes select-all, clear-selection and a live selection count.
+- Canvas selection now crosses an explicit typed callback carrying stable placement IDs and one primary ID. React no longer infers application selection by observing legacy DOM class mutations; redraw restores valid selected IDs directly and publishes selection loss only when an element or page no longer contains them.
+- Renderer-measured situation label coordinates remain serialized under the existing `labelposx`/`labelposy` keys for old-file and print compatibility, but they are no longer public mutable fields. The canvas writes them through `setDerivedLabelPosition`; duplication, snapshots and print consume the encapsulated value.
+- React now exclusively owns workspace navigation and visibility. Legacy render preparation is isolated in `WorkspaceViewAdapter`; view preparation no longer selects a tab.
+- `WorkspaceHistoryAdapter` routes schema and situation undo/redo. React components no longer call or checkpoint `undostruct`.
+- `LegacySituationPlanStore` owns situation history recording, including mutations initiated by the legacy canvas. Situation-only graph items and their placement are deleted in the same history transaction.
+- Situation occurrence creation, custom/background creation, pointer dragging and z-order changes now cross validated `SituationPlanStore` commands. A pointer gesture uses one merge key, so all mouse moves form one undo step; model array order is authoritative for screen, EDS and print stacking.
+- Situation placement IDs are persisted in new EDS writes and retained across undo/redo and save/reopen. Older files without IDs still load, while missing, unsafe or duplicate IDs receive safe unique replacements. Workspace history retains any selected placement whose ID still exists after reconstruction.
+- `LegacySituationCanvasAdapter` is the sole imperative canvas API used by React. `main.ts` no longer carries individual zoom, selection, reveal and placement callbacks.
+- The obsolete situation ribbon generator, `#ribbon` host and imperative `TopMenu` were removed. React renders the compact application menu; workspace views remain exclusively in `WorkspaceHeader`.
+- File, print and SVG download are consumed through interfaces. The global print-service singleton was deleted.
+- `LocalDocumentHost` owns the current compatibility document. File, print, autosave, history and canvas adapters read through it; the production composition no longer publishes or reads `globalThis.structure`.
+- The `undoRedo` compatibility controller also requires explicit document read/replace dependencies. The former `globalThis.structure` defaults, declaration and test scaffolding are gone.
+- `SituationPlan` and `SituationPlanElement` carry an injected document reference. Drag conversion and item lookup no longer access the global document; the superseded situation property dialogs and item finder were removed after React reached feature coverage.
+- EDS open/replace/append is connected to `DocumentHost` through `LegacyDocumentLifecyclePort`. Legacy undo reconstruction replaces the host atomically instead of continuing on a stale document instance.
+- SVG flattening receives its page-marker collection explicitly. Situation canvas selection history and property-dialog defaults receive callbacks/stores explicitly; those renderer paths no longer resolve document/history state through globals.
+- Linked-view navigation returns the contextual inspector to `Details`, and occurrence creation restores the canvas selection after schema/store synchronization so the new placement is immediately editable.
+- The no-op legacy situation sidebar and its global handlers were deleted. Situation coordinates derive from the actual canvas bounds, initial zoom waits until React has made the host measurable, and dragging through nested SVG content is browser-tested.
+- `LocalNoticeStore` and `NoticeDialog` own queued onboarding, autosave-recovery and old-switch-symbol decisions. Remembered dismissals remain in `MultiLevelStorage`; the imperative `HelperTip` and `AskLegacySchakelaar` DOM popups were deleted.
+- React owns the new-document/start flow, its electrical defaults, documentation and contact screens. The obsolete configuration host and startup HTML strings are deleted. Compatibility file inputs are created without reparsing `document.body`; file-picker functions are injected callbacks rather than browser globals.
+- Static renderer hosts and compatibility file inputs are declared in `index.html`; `main.ts` no longer builds the entire workspace from one HTML string. Situation address labels use `textContent`, while only renderer-owned SVG markup crosses an HTML parsing boundary.
+- React now owns the complete one-line viewport around that renderer boundary: guidance, the `#EDS` host, legend and version footer are rendered by `SchematicViewport`. `LegacySchematicRenderStore` computes derived SVG outside React and publishes stable snapshots; the obsolete hidden `#left_col` hierarchy host and direct `right_col_inner.innerHTML` redraw path are gone. The viewport, selection bridge and insertion overlay mount only while the schema tab is active.
 
 ## Important domain invariants
 
-- `Hierarchical_List` remains the sole authoritative electrical document during this migration.
+- `DocumentHost` holds the current document; `Hierarchical_List` remains the authoritative compatibility write model behind the stores.
 - Item ID `0` is the legacy root sentinel; real item IDs are numeric and must survive save/load.
 - Every item belongs to the nearest distribution-board root in its ancestor chain.
 - The main board has ID `main`, has no feeder and cannot be deleted or re-fed.
@@ -90,6 +112,13 @@ React must never mutate `Hierarchical_List.data` or an item `props` bag directly
 - `src/application/SchemaValidation.ts`: React-independent structural validation.
 - `src/application/EditorStore.ts`: editor-only selection, expansion and active-board state.
 - `src/application/HistoryStatusStore.ts`: reactive history availability adapter used by the situation-plan command bar.
+- `src/application/DocumentHost.ts`: owner of the current compatibility document for React-facing services.
+- `src/application/WorkspaceViewAdapter.ts`: render-only workspace preparation boundary.
+- `src/application/WorkspaceHistoryAdapter.ts`: semantic schema/situation history routing.
+- `src/application/SituationCanvasAdapter.ts`: React-facing imperative situation-canvas contract.
+- `src/legacy/LegacySituationCanvasAdapter.ts`: injected implementation over the remaining canvas renderer.
+- `src/application/SvgExportService.ts`: SVG download infrastructure boundary.
+- `src/application/SchematicRenderStore.ts`: derived, subscribeable one-line SVG boundary consumed by React without invoking the legacy renderer during render.
 - `src/application/SituationPlanAssetService.ts`: React-facing contracts for background import and situation-only symbols.
 - `src/application/LegacySituationPlanAssetService.ts`: transitional implementation over the public situation canvas and authoritative stores.
 - `src/application/PrintService.ts`: React-facing print settings, pagination, preview and export boundary.
@@ -101,6 +130,9 @@ React must never mutate `Hierarchical_List.data` or an item `props` bag directly
 - `src/ui/boards/BoardLayoutWorkspace.tsx`: central manual physical board editor.
 - `src/ui/workspace/WorkspaceCommandBar.tsx`: shared tab-aware editing commands.
 - `src/ui/workspace/FileDialog.tsx` and `src/ui/workspace/PrintDialog.tsx`: React-owned document workflows.
+- `src/ui/workspace/NewDocumentDialog.tsx` and `src/ui/workspace/HelpDialog.tsx`: React-owned startup, documentation and contact workflows.
+- `src/ui/schematic/SchematicViewport.tsx`: React-owned one-line viewport chrome around renderer-produced SVG.
+- `src/application/NoticeStore.ts` and `src/ui/workspace/NoticeDialog.tsx`: queued React notices and compatibility decisions without raw HTML.
 - `src/ui/document/DocumentDetailsEditor.tsx`: owner, installer, inspection and document info.
 - `src/ui/properties/propertyEditors.ts`: registry for React property editors.
 - `src/List_Item/Bord.ts`: existing SVG adapter for board export metadata.
@@ -117,9 +149,9 @@ npm run build
 git diff --check
 ```
 
-Baseline on 13 August 2026: 38 test files and 295 tests passed. The Vite build still reports expected warnings for non-module Pako/jsPDF/property scripts; it completes successfully.
+Baseline on 17 August 2026: 56 test files and 339 tests passed. Test typechecking, the Vite production build and all 16 Playwright tests pass. Vite still reports expected warnings for non-module Pako/jsPDF/property scripts.
 
-Playwright end-to-end smoke tests exist in `e2e/smoke.spec.ts` (`npm run test:e2e`, config in `playwright.config.ts`, starts the Vite dev server itself). Keep this suite small; migration coverage should primarily use focused application/component tests. The smoke tests cover example loading into the React editor with live SVG, circuit property editing with SVG update and undo/redo, editor search reveal, secondary-board creation/breadcrumbs/deletion, status-bar zoom, situation-plan page management plus background/custom-symbol creation, and the React print dialog. The first run exposed a real layout bug — the legacy top menu was hidden underneath the ribbon because the legacy absolute offsets did not account for the React shell header; fixed with `--react-shell-height` in `css/styles.css`.
+Playwright end-to-end tests exist in `e2e/smoke.spec.ts` and `e2e/compatibility.spec.ts` (`npm run test:e2e`, config in `playwright.config.ts`, starts the Vite dev server itself). Keep the general smoke suite small; migration coverage should primarily use focused application/component tests. The smoke tests cover React new/help flows, example loading into the React editor with live SVG, circuit property editing with SVG update and undo/redo, editor search reveal, secondary-board creation/breadcrumbs/deletion, status-bar zoom, situation-plan page management plus background/custom-symbol creation, and the React print dialog. The compatibility suite opens the checked-in EDS004 fixture, verifies an existing situation link, changes an uncommon item, downloads and reopens the EDS payload, and validates real SVG and PDF downloads. It exposed and now guards a lost-`this` crash in the legacy switch-symbol compatibility check.
 
 ## Relevant commits
 
@@ -143,7 +175,10 @@ Earlier React/property-editor commits immediately precede these in branch histor
 3. Done: `LegacyFileService` (`src/application/FileService.ts`) is the React-facing open/save adapter. The React `FileDialog` owns open, save, save-as, append and persisted file settings while retaining established browser/file-system fallbacks.
 4. Done: the unified workspace owns situation contextual commands and the fully manual `Bordindeling` editor. Board layouts are persisted in EDS006 and all mutations pass through schema commands.
 5. Done: obsolete imperative file/print pages, their global callbacks, `Print_Table` DOM builders and the superseded one-line ribbon were removed. File-system callbacks and print render/pagination services remain as compatibility boundaries; the frozen situation implementation still owns its renderer-required DOM.
-6. Perform a small manual browser smoke pass with current and old EDS fixtures, a main/garage board document, board placement save/reload, undo/redo, SVG download and PDF print.
+6. Done: EDS replace/append and undo reconstruction use `DocumentHost` lifecycle, history, autosave and render ports. Startup document replacement and situation view restoration update the host atomically; the production `globalThis.structure` mirror is gone.
+7. Replace `Hierarchical_List` as the command-side source model only after a dedicated serializable document model can round-trip all supported EDS fixtures without changing IDs, SVG or board/situation links.
+8. Done: `NewDocumentDialog` covers examples, EDS opening and electrical defaults; `HelpDialog` covers documentation and contact. The legacy configuration/start page and its embedded HTML were removed.
+9. Done: the Playwright matrix covers legacy/current fixture decoding in focused tests and exercises the checked-in EDS004 fixture through the browser, including its situation placement, uncommon items, save/download/reopen, schema and situation histories, main/secondary boards, SVG download and PDF generation.
 
 ## Common pitfalls
 

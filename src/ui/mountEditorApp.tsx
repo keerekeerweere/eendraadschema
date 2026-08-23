@@ -6,47 +6,52 @@ import type { HistoryStatusStore } from "../application/HistoryStatusStore";
 import type { SchemaStore } from "../application/SchemaStore";
 import type { SituationPlanStore } from "../application/SituationPlanStore";
 import type { SituationPlanAssetService } from "../application/SituationPlanAssetService";
-import type { LegacyFileService } from "../application/FileService";
-import type { LegacyPrintService } from "../application/PrintService";
-import type { WorkspaceStore, WorkspaceTab } from "../application/WorkspaceStore";
+import type { FileService } from "../application/FileService";
+import type { PrintService } from "../application/PrintService";
+import type { SvgExportService } from "../application/SvgExportService";
+import type { WorkspaceStore } from "../application/WorkspaceStore";
+import type { WorkspaceViewAdapter } from "../application/WorkspaceViewAdapter";
+import type { WorkspaceHistoryAdapter } from "../application/WorkspaceHistoryAdapter";
+import type { SituationCanvasAdapter } from "../application/SituationCanvasAdapter";
+import type { NoticeStore } from "../application/NoticeStore";
+import type { SchematicRenderStore } from "../application/SchematicRenderStore";
 import { EditorApp } from "./App";
+import type { NewDocumentOptions } from "./workspace/NewDocumentDialog";
 
 export interface EditorAppMountOptions {
+  readonly applicationMenuMountElement?: HTMLElement | null;
   readonly propertiesMountElement?: HTMLElement | null;
   readonly saveStatusStore?: SaveStatusStore | null;
   readonly statusBarMountElement?: HTMLElement | null;
   readonly zoomTargetElement?: HTMLElement | null;
   readonly schematicControlsMountElement?: HTMLElement | null;
+  readonly schematicRenderStore?: SchematicRenderStore | null;
+  readonly buildDate?: string;
   readonly situationPlanStore?: SituationPlanStore | null;
-  readonly onSituationPlanMutation?: (historyKey?: string) => void;
-  readonly onSituationPlanZoomIn?: () => void;
-  readonly onSituationPlanZoomOut?: () => void;
-  readonly onSituationPlanZoomToFit?: () => void;
-  readonly onSituationPlanItemsDeleted?: (itemIds: readonly number[]) => void;
-  readonly onSituationPlanSelectAll?: () => void;
-  readonly onSituationPlanClearSelection?: () => void;
-  readonly onSituationPlanSendBackward?: () => void;
-  readonly onSituationPlanBringForward?: () => void;
+  readonly situationCanvasAdapter?: SituationCanvasAdapter | null;
   readonly workspaceStore?: WorkspaceStore;
-  readonly onSelectWorkspaceTab?: (tab: WorkspaceTab) => void;
-  readonly canCreateSituationOccurrence?: (itemId: number) => boolean;
-  readonly onCreateSituationOccurrence?: (itemId: number) => void;
-  readonly onRevealSituationOccurrence?: (occurrenceId: string) => void;
+  readonly workspaceViewAdapter?: WorkspaceViewAdapter | null;
   readonly onRevealBoardItem?: (itemId: number) => void;
   readonly situationPaperElement?: HTMLElement | null;
   readonly commandBarMountElement?: HTMLElement | null;
   readonly boardLayoutMountElement?: HTMLElement | null;
+  readonly workspaceSidebarElement?: HTMLElement | null;
+  readonly workspaceInspectorElement?: HTMLElement | null;
+  readonly schematicWorkspaceElement?: HTMLElement | null;
+  readonly situationWorkspaceElement?: HTMLElement | null;
   readonly situationHistoryStore?: HistoryStatusStore | null;
-  readonly onSituationUndo?: () => void;
-  readonly onSituationRedo?: () => void;
+  readonly historyAdapter?: WorkspaceHistoryAdapter | null;
   readonly onSave?: () => void;
   readonly onOpenFile?: () => void;
   readonly situationPlanAssetService?: SituationPlanAssetService | null;
-  readonly fileService?: LegacyFileService | null;
-  readonly printService?: LegacyPrintService | null;
+  readonly fileService?: FileService | null;
+  readonly printService?: PrintService | null;
+  readonly svgExportService?: SvgExportService | null;
   readonly onOpenDocument?: () => void;
   readonly onAppendDocument?: () => void;
-  readonly onDownloadPrintSvg?: (svg: string, filename: string) => void;
+  readonly onLoadExample?: (example: 0 | 1) => void;
+  readonly onCreateEmptyDocument?: (options: NewDocumentOptions) => void;
+  readonly noticeStore?: NoticeStore | null;
 }
 
 export function mountEditorApp(
@@ -63,41 +68,39 @@ export function mountEditorApp(
         schemaStore={schemaStore}
         editorStore={editorStore}
         hierarchyMountElement={hierarchyMountElement}
+        applicationMenuMountElement={options.applicationMenuMountElement ?? null}
         propertiesMountElement={options.propertiesMountElement ?? null}
         saveStatusStore={options.saveStatusStore ?? null}
         statusBarMountElement={options.statusBarMountElement ?? null}
         zoomTargetElement={options.zoomTargetElement ?? null}
         schematicControlsMountElement={options.schematicControlsMountElement ?? null}
+        schematicRenderStore={options.schematicRenderStore ?? null}
+        buildDate={options.buildDate ?? ""}
         situationPlanStore={options.situationPlanStore ?? null}
-        onSituationPlanMutation={options.onSituationPlanMutation}
-        onSituationPlanZoomIn={options.onSituationPlanZoomIn}
-        onSituationPlanZoomOut={options.onSituationPlanZoomOut}
-        onSituationPlanZoomToFit={options.onSituationPlanZoomToFit}
-        onSituationPlanItemsDeleted={options.onSituationPlanItemsDeleted}
-        onSituationPlanSelectAll={options.onSituationPlanSelectAll}
-        onSituationPlanClearSelection={options.onSituationPlanClearSelection}
-        onSituationPlanSendBackward={options.onSituationPlanSendBackward}
-        onSituationPlanBringForward={options.onSituationPlanBringForward}
+        situationCanvasAdapter={options.situationCanvasAdapter ?? null}
         workspaceStore={options.workspaceStore}
-        onSelectWorkspaceTab={options.onSelectWorkspaceTab}
-        canCreateSituationOccurrence={options.canCreateSituationOccurrence}
-        onCreateSituationOccurrence={options.onCreateSituationOccurrence}
-        onRevealSituationOccurrence={options.onRevealSituationOccurrence}
+        workspaceViewAdapter={options.workspaceViewAdapter}
         onRevealBoardItem={options.onRevealBoardItem}
         situationPaperElement={options.situationPaperElement ?? null}
         commandBarMountElement={options.commandBarMountElement ?? null}
         boardLayoutMountElement={options.boardLayoutMountElement ?? null}
+        workspaceSidebarElement={options.workspaceSidebarElement ?? null}
+        workspaceInspectorElement={options.workspaceInspectorElement ?? null}
+        schematicWorkspaceElement={options.schematicWorkspaceElement ?? null}
+        situationWorkspaceElement={options.situationWorkspaceElement ?? null}
         situationHistoryStore={options.situationHistoryStore ?? null}
-        onSituationUndo={options.onSituationUndo}
-        onSituationRedo={options.onSituationRedo}
+        historyAdapter={options.historyAdapter ?? null}
         onSave={options.onSave}
         onOpenFile={options.onOpenFile}
         situationPlanAssetService={options.situationPlanAssetService ?? null}
         fileService={options.fileService ?? null}
         printService={options.printService ?? null}
+        svgExportService={options.svgExportService ?? null}
         onOpenDocument={options.onOpenDocument}
         onAppendDocument={options.onAppendDocument}
-        onDownloadPrintSvg={options.onDownloadPrintSvg}
+        onLoadExample={options.onLoadExample}
+        onCreateEmptyDocument={options.onCreateEmptyDocument}
+        noticeStore={options.noticeStore ?? null}
       />
     </StrictMode>,
   );

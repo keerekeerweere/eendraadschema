@@ -5,10 +5,11 @@
     --selectPadding: 2;
     --paperPadding: 10px;
     --menu-height: 40px;
-    --ribbon-height: 68px;
+    --ribbon-height: 56px;
     --status-bar-height: 0px;
-    --react-shell-height: 72px;
-    --sideBarWidth: 0px;
+    --react-shell-height: 64px;
+    --workspace-left-width: 19rem;
+    --workspace-right-width: 19rem;
     --total-offset: calc(var(--react-shell-height) + var(--menu-height) + var(--ribbon-height) + var(--status-bar-height));
   }
 
@@ -18,7 +19,26 @@
   }
 
   body {
+    min-width: 20rem;
     cursor: default;
+  }
+
+  #app { min-height: 0; }
+
+  #react-workspace-sidebar,
+  #properties_col { scrollbar-gutter: stable; }
+
+  .workspace-resize-handle { touch-action: none; }
+
+  @media (max-width: 72rem) {
+    #react-workspace-sidebar,
+    #properties_col { display: none !important; }
+
+    #react-board-layout-root,
+    #canvas_2col,
+    #outerdiv { right: 0 !important; left: 0 !important; }
+
+    .workspace-resize-handle { display: none !important; }
   }
 
   button,

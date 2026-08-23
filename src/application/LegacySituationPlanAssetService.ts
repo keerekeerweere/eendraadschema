@@ -40,34 +40,33 @@ export class LegacySituationPlanAssetService implements SituationPlanAssetServic
 
     const structure = this.situationStore.getLegacyDocument();
     const defaults = structure.sitplan.getDefaults();
-    const element = new SituationPlanElement();
-    element.setVars({
-      page: structure.sitplan.getActivePage(),
-      posx: this.paperElement.offsetWidth / 2,
-      posy: this.paperElement.offsetHeight / 2,
-      labelfontsize: defaults.fontsize,
-      scale: defaults.scale,
-      rotate: defaults.rotate,
-    });
-    element.sizex = image.width;
-    element.sizey = image.height;
-    element.svg = `<svg width="${image.width}" height="${image.height}"><image href="${image.dataUrl}" width="${image.width}" height="${image.height}"/></svg>`;
-    element.needsViewUpdate = true;
-    structure.sitplan.addElement(element);
-
-    const previousScale = element.getscale();
-    element.scaleSelectedBoxToPaperIfNeeded(
-      this.paperElement.offsetWidth * 0.995,
-      this.paperElement.offsetHeight * 0.995,
+    const scale = Math.floor(Math.min(
       defaults.scale,
-    );
+      this.paperElement.offsetWidth * 0.995 / image.width,
+      this.paperElement.offsetHeight * 0.995 / image.height,
+    ) * 10_000) / 10_000;
+    const elementId = this.situationStore.commands.addCustomElement({
+      page: structure.sitplan.getActivePage(),
+      position: {
+        x: this.paperElement.offsetWidth / 2,
+        y: this.paperElement.offsetHeight / 2,
+      },
+      size: { width: image.width, height: image.height },
+      labelFontSize: defaults.fontsize,
+      scale,
+      rotation: defaults.rotate,
+      svg: `<svg width="${image.width}" height="${image.height}"><image href="${image.dataUrl}" width="${image.width}" height="${image.height}"/></svg>`,
+    });
+    const element = structure.sitplan.getElements().find(candidate => candidate.id === elementId);
+    if (!element) {
+      throw new SituationPlanAssetError("CANVAS_UNAVAILABLE", "De plattegrond kon niet worden geplaatst.");
+    }
     this.selectImportedElement(view, element);
-    this.situationStore.synchronizeLegacyDocument(structure);
     this.historyChanged();
 
     return {
       elementId: element.id,
-      scaledToFit: element.getscale() !== previousScale,
+      scaledToFit: scale !== defaults.scale,
       largeFile: image.dataUrl.length > 5_000_000,
     };
   }
@@ -100,7 +99,7 @@ export class LegacySituationPlanAssetService implements SituationPlanAssetServic
       options.scale,
       options.rotation,
     );
-    this.situationStore.synchronizeLegacyDocument(structure);
+    this.schemaStore.synchronizeLegacyDocument(structure);
     this.historyChanged();
 
     const matchingElements = structure.sitplan.getElements()
@@ -131,7 +130,6 @@ export class LegacySituationPlanAssetService implements SituationPlanAssetServic
     view.clearSelection();
     view.redraw();
     view.selectOneBox(element.boxref);
-    view.bringToFront();
   }
 }
 

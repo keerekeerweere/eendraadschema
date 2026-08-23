@@ -33,10 +33,16 @@ export interface FileServiceDependencies {
   readonly afterExport?: (payload: string) => void;
 }
 
+export interface FileService {
+  getState(): FileServiceState;
+  openDocumentText(): Promise<string>;
+  saveDocument(saveAs: boolean): Promise<void>;
+}
+
 /** React-facing adapter for opening and saving EDS documents. It preserves
  *  the File System Access flow, the plain-download fallback and the manual
  *  autosave bookkeeping the legacy file page performs. */
-export class LegacyFileService {
+export class LegacyFileService implements FileService {
   constructor(private readonly deps: FileServiceDependencies) {}
 
   getState(): FileServiceState {

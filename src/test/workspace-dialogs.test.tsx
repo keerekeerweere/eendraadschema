@@ -14,13 +14,11 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  delete (globalThis as { structure?: unknown }).structure;
 });
 
 describe("workspace file and print dialogs", () => {
   it("updates file settings and saves through FileService", async () => {
     const structure = loadFixture("example001.eds");
-    globalThis.structure = structure;
     const saveAs = vi.fn(async () => {});
     const fileService = new LegacyFileService({
       getDocument: () => structure,
@@ -61,12 +59,12 @@ describe("workspace file and print dialogs", () => {
   it("renders and navigates the print preview through PrintService", () => {
     SVGSymbols.clearSymbols();
     const structure = loadFixture("example001.eds");
-    globalThis.structure = structure;
     const service = new LegacyPrintService(() => structure);
+    const download = vi.fn();
     render(
       <PrintDialog
         printService={service}
-        onDownloadSvg={() => {}}
+        svgExportService={{ download }}
         onClose={() => {}}
       />,
     );
@@ -75,5 +73,7 @@ describe("workspace file and print dialogs", () => {
     expect(screen.getByLabelText("Voorbeeldpagina")).toHaveValue("0");
     fireEvent.change(screen.getByLabelText("Papierformaat"), { target: { value: "A3" } });
     expect(service.getPreviewState().paperSize).toBe("A3");
+    fireEvent.click(screen.getByRole("button", { name: "SVG downloaden" }));
+    expect(download).toHaveBeenCalledWith(expect.stringContaining("<svg"), "eendraadschema_print.svg");
   });
 });

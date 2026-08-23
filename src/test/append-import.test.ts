@@ -3,7 +3,8 @@
 import { describe, expect, it } from "vitest";
 import type { BoardLayout } from "../domain/BoardLayout";
 import type { DistributionBoard } from "../domain/DistributionBoard";
-import { mergeAppendedBoardLayouts, mergeAppendedBoards } from "../importExport/importExport";
+import { appendStructure, mergeAppendedBoardLayouts, mergeAppendedBoards } from "../importExport/importExport";
+import { Hierarchical_List } from "../Hierarchical_List";
 
 const targetBoards: readonly DistributionBoard[] = [
   { id: "main", name: "Hoofdbord", rootItemIds: [1, 2] },
@@ -14,6 +15,24 @@ const targetBoards: readonly DistributionBoard[] = [
     feeder: { sourceBoardId: "main", sourceCircuitId: 5 },
   },
 ];
+
+describe("appendStructure", () => {
+  it("merges into the supplied document without consulting global state", () => {
+    const target = new Hierarchical_List();
+    target.addItem("Bord");
+    const appended = new Hierarchical_List();
+    appended.addItem("Kring");
+    const targetLength = target.length;
+    const appendedLength = appended.length;
+    const previousMaximumId = Math.max(...target.id);
+
+    appendStructure(target, appended);
+
+    expect(target.length).toBe(targetLength + appendedLength);
+    expect(target.id.filter(id => id > previousMaximumId)).toHaveLength(appendedLength);
+    expect(target.data.every(item => item.sourcelist === target)).toBe(true);
+  });
+});
 
 describe("mergeAppendedBoards", () => {
   it("keeps the target boards unchanged when the appended document only has a main board", () => {

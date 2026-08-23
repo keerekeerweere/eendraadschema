@@ -12,48 +12,51 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  delete (globalThis as { structure?: unknown }).structure;
 });
 
-function createInspectorState() {
+function createInspectorState(onMutation = vi.fn()) {
   const structure = loadFixture("example001.eds");
-  globalThis.structure = structure;
   const element = new SituationPlanElement();
   element.posx = 20;
   element.posy = 30;
   structure.sitplan.addElement(element);
-  const situationPlanStore = new LegacySituationPlanStore(structure);
+  const situationPlanStore = new LegacySituationPlanStore(structure, {
+    record: onMutation,
+    undo: vi.fn(),
+    redo: vi.fn(),
+  });
   const workspaceStore = new LocalWorkspaceStore();
   workspaceStore.commands.selectTab("situation");
   workspaceStore.commands.selectSituationElement(element.id);
-  return { element, situationPlanStore, workspaceStore };
+  return { element, situationPlanStore, workspaceStore, onMutation };
 }
 
-function createMultiInspectorState() {
+function createMultiInspectorState(onMutation = vi.fn()) {
   const structure = loadFixture("example001.eds");
-  globalThis.structure = structure;
   const first = new SituationPlanElement();
   const second = new SituationPlanElement();
   first.posx = 20;
   second.posx = 60;
   structure.sitplan.addElement(first);
   structure.sitplan.addElement(second);
-  const situationPlanStore = new LegacySituationPlanStore(structure);
+  const situationPlanStore = new LegacySituationPlanStore(structure, {
+    record: onMutation,
+    undo: vi.fn(),
+    redo: vi.fn(),
+  });
   const workspaceStore = new LocalWorkspaceStore();
   workspaceStore.commands.selectTab("situation");
   workspaceStore.commands.selectSituationElements([first.id, second.id], second.id);
-  return { first, second, situationPlanStore, workspaceStore };
+  return { first, second, situationPlanStore, workspaceStore, onMutation };
 }
 
 describe("SituationElementInspector", () => {
   it("edits placement geometry and lock state through store commands", () => {
-    const { element, situationPlanStore, workspaceStore } = createInspectorState();
-    const onMutation = vi.fn();
+    const { element, situationPlanStore, workspaceStore, onMutation } = createInspectorState();
     render(
       <SituationElementInspector
         situationPlanStore={situationPlanStore}
         workspaceStore={workspaceStore}
-        onMutation={onMutation}
       />,
     );
 
@@ -76,7 +79,6 @@ describe("SituationElementInspector", () => {
       <SituationElementInspector
         situationPlanStore={situationPlanStore}
         workspaceStore={new LocalWorkspaceStore()}
-        onMutation={() => {}}
       />,
     );
 
@@ -89,13 +91,12 @@ describe("SituationElementInspector", () => {
       second,
       situationPlanStore,
       workspaceStore,
+      onMutation,
     } = createMultiInspectorState();
-    const onMutation = vi.fn();
     render(
       <SituationElementInspector
         situationPlanStore={situationPlanStore}
         workspaceStore={workspaceStore}
-        onMutation={onMutation}
       />,
     );
 

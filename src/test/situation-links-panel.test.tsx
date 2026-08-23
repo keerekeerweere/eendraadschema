@@ -13,12 +13,10 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  delete (globalThis as { structure?: unknown }).structure;
 });
 
 function createLinkedItem() {
   const structure = loadFixture("example001.eds");
-  globalThis.structure = structure;
   const item = structure.data.find(
     (candidate): candidate is Electro_Item => candidate instanceof Electro_Item && candidate.getType() === "Kring",
   )!;

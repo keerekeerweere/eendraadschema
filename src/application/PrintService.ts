@@ -37,10 +37,23 @@ export interface PrintSettingsChanges {
   readonly stopY?: number;
 }
 
+export interface PrintService {
+  computeLayout(): SVGelement;
+  getPreviewState(): PrintPreviewState;
+  setDisplayPageIndex(pageIndex: number): void;
+  validatePageRange(pageRange: string): boolean;
+  updateSettings(changes: PrintSettingsChanges): void;
+  addManualPage(): void;
+  deleteManualPage(pageIndex: number): void;
+  updateManualPage(pageIndex: number, changes: Readonly<{ stop?: number; info?: string }>): void;
+  getPreviewSvg(pageIndex?: number, precomputedSvg?: SVGelement): string;
+  generatePdf(options: GeneratePdfOptions): void;
+}
+
 /** React-facing adapter over the legacy print pipeline. It owns no state of
  *  its own: pagination, paper size and dpi stay on the authoritative legacy
  *  document, and SVG/PDF generation is delegated unchanged. */
-export class LegacyPrintService {
+export class LegacyPrintService implements PrintService {
   constructor(private readonly getDocument: () => Hierarchical_List) {}
 
   /** Regenerate the one-line SVG and feed its dimensions to the pagination
@@ -150,7 +163,11 @@ export class LegacyPrintService {
     const document = this.getDocument();
     if (typeof document.properties.dpi === "undefined") document.properties.dpi = 300;
 
-    const svg = flattenSVGfromString(document.toSVG(0, "horizontal").data);
+    const svg = flattenSVGfromString(
+      document.toSVG(0, "horizontal").data,
+      0,
+      document.print_table.pagemarkers,
+    );
     const state = this.getPreviewState();
     if (!this.validatePageRange(options.pageRange ?? "")) {
       throw new RangeError("Het opgegeven paginabereik is ongeldig.");
