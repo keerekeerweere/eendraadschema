@@ -36,6 +36,25 @@ describe("EDS compatibility", () => {
     expect(reloaded.curid).toBe(original.curid);
     expect(reloaded.properties.filename).toBe(original.properties.filename);
     expect(reloaded.sitplan.toJsonObject()).toEqual(original.sitplan.toJsonObject());
+    expect(reloaded.sitplan.getElements().map(element => element.id))
+      .toEqual(original.sitplan.getElements().map(element => element.id));
+  });
+
+  it("assigns safe unique placement IDs when older data has none or duplicates", () => {
+    const original = new Hierarchical_List();
+    original.sitplan.addElement(new SituationPlanElement());
+    original.sitplan.addElement(new SituationPlanElement());
+    original.sitplan.addElement(new SituationPlanElement());
+    const legacyJson = JSON.parse(original.toJsonObject(true));
+    delete legacyJson.sitplanjson.elements[0].id;
+    legacyJson.sitplanjson.elements[1].id = "SP_duplicate";
+    legacyJson.sitplanjson.elements[2].id = "SP_duplicate";
+
+    const reloaded = structureFromJson(JSON.stringify(legacyJson), null, 4);
+    const ids = reloaded.sitplan.getElements().map(element => element.id);
+
+    expect(ids.every(id => /^SP_[A-Za-z0-9_-]+$/.test(id))).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("decodes the current uncompressed EDS envelope", () => {
@@ -86,6 +105,7 @@ describe("EDS compatibility", () => {
       "Overspanningsbeveiliging",
     ]);
     expect(structure.sitplan.getElements()[0].getElectroItemId()).toBe(4);
+    expect(structure.sitplan.heeftEenzameSchakelaars()).toBe(false);
   });
 
   it("migrates documents without board metadata to one default main board", () => {

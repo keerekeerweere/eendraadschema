@@ -1,16 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { LegacyPrintService } from "../application/PrintService";
 import { SVGSymbols } from "../SVGSymbols";
 import { loadFixture } from "./helpers";
 
-afterEach(() => {
-  delete (globalThis as { structure?: unknown }).structure;
-});
-
 function createService() {
   SVGSymbols.clearSymbols();
   const structure = loadFixture("example001.eds");
-  globalThis.structure = structure;
   const service = new LegacyPrintService(() => structure);
   return { structure, service };
 }

@@ -3,6 +3,7 @@ import type { EditorStore } from "../../application/EditorStore";
 import type { SchemaStore } from "../../application/SchemaStore";
 import { useEditorSnapshot } from "../useEditorSnapshot";
 import { useSchemaSnapshot } from "../useSchemaSnapshot";
+import { getItemPresentation } from "../../application/DossierReader";
 
 interface BoardLayoutWorkspaceProps {
   readonly schemaStore: SchemaStore;
@@ -17,6 +18,7 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
   const boardItems = useMemo(() => schema.document.getAllItems().filter(item => (
     item.role === "item"
     && schema.document.getBoardForItem(item.id)?.id === editor.activeBoardId
+    && getItemPresentation(item.type) === "panel-device"
   )), [editor.activeBoardId, schema]);
   const placedItemIds = new Set(layout?.placements.map(placement => placement.itemId) ?? []);
   const unplacedItems = boardItems.filter(item => !placedItemIds.has(item.id));
@@ -161,14 +163,14 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
         </div>
 
         {layout && layout.rails.length > 0 ? (
-          <form className="mt-5 grid gap-3 rounded-lg border border-neutral-300 bg-white p-4 md:grid-cols-5" onSubmit={addPlacement}>
+          <form className="mt-5 grid gap-3 rounded-lg border border-neutral-300 bg-white p-4 md:grid-cols-2" onSubmit={addPlacement}>
             <label className="grid gap-1 text-xs font-semibold text-neutral-600 md:col-span-2">
               Ongeplaatst onderdeel
               <select className={fieldClass} value={itemId} onChange={event => setItemId(event.target.value)}>
                 {unplacedItems.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
             </label>
-            <label className="grid gap-1 text-xs font-semibold text-neutral-600">
+            <label className="grid gap-1 text-xs font-semibold text-neutral-600 md:col-span-2">
               Bordrij
               <select className={fieldClass} value={railId} onChange={event => setRailId(event.target.value)}>
                 {layout.rails.map(rail => <option key={rail.id} value={rail.id}>{rail.name}</option>)}

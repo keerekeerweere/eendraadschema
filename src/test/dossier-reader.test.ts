@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { createDossierSnapshot } from "../application/DossierReader";
+import { getInstallationItemPolicy } from "../application/InstallationItemPolicy";
 import { LegacySchemaStore } from "../application/LegacySchemaStore";
 import { LegacySituationPlanStore } from "../application/LegacySituationPlanStore";
 import { loadFixture } from "./helpers";
@@ -9,9 +10,34 @@ beforeEach(() => {
 });
 
 describe("dossier read model", () => {
-  it("reports missing situation-plan links for field items but not graph structure", () => {
+  it("uses one item policy for required placements across all views", () => {
+    expect(getInstallationItemPolicy("Kring")).toMatchObject({
+      presentation: "panel-device",
+      requiresBoardPlacement: true,
+      requiresSituationPlacement: false,
+    });
+    expect(getInstallationItemPolicy("Bord").presentation).toBe("structural");
+    expect(getInstallationItemPolicy("Contactdoos")).toMatchObject({
+      presentation: "field-device",
+      requiresSituationPlacement: true,
+    });
+  });
+
+  it("assigns a stable unique id to every missing dossier field", () => {
     const structure = loadFixture("example001.eds");
-    globalThis.structure = structure;
+    const schema = new LegacySchemaStore(structure);
+    const situation = new LegacySituationPlanStore(structure);
+
+    const metadataIssues = createDossierSnapshot(schema.getSnapshot(), situation.getSnapshot())
+      .issues.filter(issue => issue.code === "MISSING_DOSSIER_METADATA");
+
+    expect(metadataIssues.length).toBeGreaterThan(1);
+    expect(new Set(metadataIssues.map(issue => issue.id)).size).toBe(metadataIssues.length);
+    expect(metadataIssues.every(issue => issue.itemId === undefined)).toBe(true);
+  });
+
+  it("reports missing situation links for field items and treats circuit protection as a board device", () => {
+    const structure = loadFixture("example001.eds");
     const schema = new LegacySchemaStore(structure);
     const situation = new LegacySituationPlanStore(structure);
 
@@ -19,7 +45,7 @@ describe("dossier read model", () => {
     const circuit = schema.getSnapshot().document.getAllItems().find(item => item.type === "Kring")!;
 
     expect(dossier.items.find(item => item.itemId === circuit.id)).toMatchObject({
-      presentation: "structural",
+      presentation: "panel-device",
       circuitId: circuit.id,
     });
     expect(dossier.issues.some(issue => issue.code === "MISSING_SITUATION_PLACEMENT")).toBe(true);
@@ -27,7 +53,6 @@ describe("dossier read model", () => {
 
   it("does not need a second persisted link when an occurrence is present", () => {
     const structure = loadFixture("example001.eds");
-    globalThis.structure = structure;
     const schema = new LegacySchemaStore(structure);
     const situation = new LegacySituationPlanStore(structure);
     const fieldItem = schema.getSnapshot().document.getAllItems().find(item => (

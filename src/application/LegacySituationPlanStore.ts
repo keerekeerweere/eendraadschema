@@ -4,6 +4,8 @@ import { SituationPlanElement } from "../sitplan/SituationPlanElement";
 import {
   SituationPlanCommandError,
   type SituationPlanCommands,
+  type AddSituationOccurrenceProperties,
+  type AddSituationCustomElementProperties,
   type SituationPlanElementChanges,
   type SituationPlanAlignment,
   type SituationPlanDistributionAxis,
@@ -13,7 +15,11 @@ import {
   type SituationPlanStore,
 } from "./SituationPlanStore";
 
-export type SituationPlanMutationCommitted = () => void;
+export interface SituationPlanHistoryPort {
+  record(historyKey?: string): void;
+  undo(): Hierarchical_List | void;
+  redo(): Hierarchical_List | void;
+}
 
 export class LegacySituationPlanStore implements SituationPlanStore {
   private structure: Hierarchical_List;
@@ -26,18 +32,25 @@ export class LegacySituationPlanStore implements SituationPlanStore {
 
   constructor(
     structure: Hierarchical_List,
-    private readonly mutationCommitted?: SituationPlanMutationCommitted,
+    private readonly history?: SituationPlanHistoryPort,
   ) {
     this.structure = structure;
     this.snapshot = this.createSnapshot();
     this.stateKey = this.createStateKey(this.snapshot);
     this.commands = Object.freeze({
+      undo: this.undo.bind(this),
+      redo: this.redo.bind(this),
       selectPage: this.selectPage.bind(this),
       addPage: this.addPage.bind(this),
       deletePage: this.deletePage.bind(this),
       updateDefaults: this.updateDefaults.bind(this),
+      addOccurrence: this.addOccurrence.bind(this),
+      addCustomElement: this.addCustomElement.bind(this),
       updateElement: this.updateElement.bind(this),
       updateElements: this.updateElements.bind(this),
+      translateElements: this.translateElements.bind(this),
+      sendElementsToBack: this.sendElementsToBack.bind(this),
+      bringElementsToFront: this.bringElementsToFront.bind(this),
       alignElements: this.alignElements.bind(this),
       distributeElements: this.distributeElements.bind(this),
       duplicateElements: this.duplicateElements.bind(this),
@@ -54,7 +67,7 @@ export class LegacySituationPlanStore implements SituationPlanStore {
     return () => this.listeners.delete(listener);
   }
 
-  /** Transitional seam for the legacy canvas while its interactions are migrated. */
+  /** Transitional document replacement seam used by EDS and shared graph commands. */
   synchronizeLegacyDocument(structure: Hierarchical_List = this.structure): void {
     this.structure = structure;
     const nextSnapshot = this.createSnapshot();
@@ -67,10 +80,20 @@ export class LegacySituationPlanStore implements SituationPlanStore {
     return this.structure;
   }
 
+  private undo(): void {
+    const document = this.history?.undo();
+    this.synchronizeLegacyDocument(document ? document : this.structure);
+  }
+
+  private redo(): void {
+    const document = this.history?.redo();
+    this.synchronizeLegacyDocument(document ? document : this.structure);
+  }
+
   private selectPage(page: number): void {
     this.assertPage(page);
     if (page === this.plan.getActivePage()) return;
-    this.commit(() => this.plan.setActivePage(page));
+    this.commit(() => this.plan.setActivePage(page), "changePage");
   }
 
   private addPage(): number {
@@ -108,11 +131,111 @@ export class LegacySituationPlanStore implements SituationPlanStore {
     this.commit(() => this.plan.updateDefaults(changes));
   }
 
+  private addOccurrence(properties: AddSituationOccurrenceProperties): string {
+    this.validateNewElement(properties);
+    const item = this.structure.getElectroItemById(properties.itemId);
+    if (!item) {
+      throw new SituationPlanCommandError(
+        "INVALID_ELEMENT_CHANGE",
+        `Elektrisch onderdeel ${properties.itemId} bestaat niet.`,
+      );
+    }
+    if (this.plan.countByElectroItemId(properties.itemId) >= item.maxSituationPlanElements()) {
+      throw new SituationPlanCommandError(
+        "INVALID_ELEMENT_CHANGE",
+        `Elektrisch onderdeel ${properties.itemId} laat geen extra plaatsing toe.`,
+      );
+    }
+
+    return this.commit(() => {
+      const element = this.plan.addElementFromElectroItem(
+        properties.itemId,
+        properties.page,
+        properties.position.x,
+        properties.position.y,
+        properties.addressType,
+        properties.address,
+        properties.addressLocation,
+        properties.labelFontSize,
+        properties.scale,
+        properties.rotation,
+      );
+      if (!element) {
+        throw new SituationPlanCommandError(
+          "INVALID_ELEMENT_CHANGE",
+          `Elektrisch onderdeel ${properties.itemId} kon niet worden geplaatst.`,
+        );
+      }
+      this.structure.placementTasks = this.structure.placementTasks.filter(
+        task => !(task.itemId === properties.itemId && task.destination === "situation"),
+      );
+      return element.id;
+    });
+  }
+
+  private addCustomElement(properties: AddSituationCustomElementProperties): string {
+    this.validateNewElement(properties);
+    if (
+      !Number.isFinite(properties.size.width)
+      || !Number.isFinite(properties.size.height)
+      || properties.size.width <= 0
+      || properties.size.height <= 0
+      || properties.svg.trim() === ""
+    ) {
+      throw new SituationPlanCommandError(
+        "INVALID_ELEMENT_CHANGE",
+        "Een vrij situatiesymbool vereist geldige afmetingen en SVG-inhoud.",
+      );
+    }
+
+    return this.commit(() => {
+      const element = new SituationPlanElement();
+      element.setVars({
+        page: properties.page,
+        posx: properties.position.x,
+        posy: properties.position.y,
+        labelfontsize: properties.labelFontSize,
+        scale: properties.scale,
+        rotate: properties.rotation,
+      });
+      element.sizex = properties.size.width;
+      element.sizey = properties.size.height;
+      element.svg = properties.svg;
+      element.needsViewUpdate = true;
+      this.plan.addElement(element);
+      return element.id;
+    });
+  }
+
+  private validateNewElement(properties: Readonly<{
+    page: number;
+    position: Readonly<{ x: number; y: number }>;
+    labelFontSize: number;
+    scale: number;
+    rotation: number;
+  }>): void {
+    this.assertPage(properties.page);
+    if (
+      !Number.isFinite(properties.position.x)
+      || !Number.isFinite(properties.position.y)
+      || !Number.isFinite(properties.labelFontSize)
+      || properties.labelFontSize <= 0
+      || !Number.isFinite(properties.scale)
+      || properties.scale <= 0
+      || !Number.isFinite(properties.rotation)
+    ) {
+      throw new SituationPlanCommandError(
+        "INVALID_ELEMENT_CHANGE",
+        "De positie, schaal, rotatie en labelgrootte moeten geldig zijn.",
+      );
+    }
+  }
+
   private updateElement(elementId: string, changes: SituationPlanElementChanges): void {
     this.updateElements([{ elementId, changes }]);
   }
 
-  private updateElements(updates: readonly SituationPlanElementUpdate[]): void {
+  private updateElements(updates: readonly SituationPlanElementUpdate[], historyKey?: string): void {
     const elementIds = new Set<string>();
     const prepared = updates.map(({ elementId, changes }) => {
       if (elementIds.has(elementId)) {
@@ -131,7 +254,46 @@ export class LegacySituationPlanStore implements SituationPlanStore {
       for (const update of prepared) {
         this.applyElementChanges(update.element, update.serialized, update.changes);
       }
-    });
+    }, historyKey);
+  }
+
+  private translateElements(
+    elementIds: readonly string[],
+    offset: Readonly<{ x: number; y: number }>,
+    historyKey: string,
+  ): void {
+    if (!Number.isFinite(offset.x) || !Number.isFinite(offset.y) || historyKey.trim() === "") {
+      throw new SituationPlanCommandError(
+        "INVALID_ELEMENT_CHANGE",
+        "De sleepverplaatsing en historiesleutel moeten geldig zijn.",
+      );
+    }
+    if (offset.x === 0 && offset.y === 0) return;
+    const elements = this.requireSelectedElements(elementIds, 1).filter(element => element.movable);
+    this.updateElements(elements.map(element => ({
+      elementId: element.id,
+      changes: { position: { x: element.posx + offset.x, y: element.posy + offset.y } },
+    })), historyKey);
+  }
+
+  private sendElementsToBack(elementIds: readonly string[]): void {
+    this.moveElementsToEdge(elementIds, false);
+  }
+
+  private bringElementsToFront(elementIds: readonly string[]): void {
+    this.moveElementsToEdge(elementIds, true);
+  }
+
+  private moveElementsToEdge(elementIds: readonly string[], front: boolean): void {
+    const movableIds = new Set(
+      this.requireSelectedElements(elementIds, 1)
+        .filter(element => element.movable)
+        .map(element => element.id),
+    );
+    if (movableIds.size === 0) return;
+    this.commitWhenChanged(() => front
+      ? this.plan.moveElementsToFront(movableIds)
+      : this.plan.moveElementsToBack(movableIds));
   }
 
   private alignElements(elementIds: readonly string[], alignment: SituationPlanAlignment): void {
@@ -211,12 +373,13 @@ export class LegacySituationPlanStore implements SituationPlanStore {
     }
     const duplicates = elements.map((element) => {
       const duplicate = new SituationPlanElement();
+      const labelPosition = element.getLabelPosition();
       duplicate.fromJsonObject({
         ...element.toJsonObject(),
         posx: element.posx + offset.x,
         posy: element.posy + offset.y,
-        labelposx: element.labelposx + offset.x,
-        labelposy: element.labelposy + offset.y,
+        labelposx: labelPosition.x + offset.x,
+        labelposy: labelPosition.y + offset.y,
       });
       return duplicate;
     });
@@ -229,15 +392,16 @@ export class LegacySituationPlanStore implements SituationPlanStore {
   private deleteElements(elementIds: readonly string[]): readonly number[] {
     const elements = this.requireSelectedElements(elementIds, 1);
     const deletableElements = elements.filter(element => element.movable);
-    const deletedItemIds = deletableElements.flatMap((element) => {
+    const deletedItemIds = [...new Set(deletableElements.flatMap((element) => {
       const itemId = element.getElectroItemId();
       if (itemId === null) return [];
       const item = this.structure.getElectroItemById(itemId);
       return item?.getParent()?.getType() === "Container" ? [itemId] : [];
-    });
+    }))];
     if (deletableElements.length === 0) return Object.freeze([]);
     return this.commit(() => {
       for (const element of deletableElements) this.plan.removeElement(element);
+      for (const itemId of deletedItemIds) this.structure.deleteById(itemId);
       return Object.freeze(deletedItemIds);
     });
   }
@@ -361,11 +525,17 @@ export class LegacySituationPlanStore implements SituationPlanStore {
     }
   }
 
-  private commit<Result>(mutation: () => Result): Result {
+  private commit<Result>(mutation: () => Result, historyKey?: string): Result {
     const result = mutation();
-    this.mutationCommitted?.();
+    this.history?.record(historyKey);
     this.publish();
     return result;
+  }
+
+  private commitWhenChanged(mutation: () => boolean, historyKey?: string): void {
+    if (!mutation()) return;
+    this.history?.record(historyKey);
+    this.publish();
   }
 
   private get plan(): SituationPlan {

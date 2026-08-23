@@ -83,6 +83,8 @@ export type AgentGraphOperation =
 
 export interface SchemaCommands {
   addItem(parentId: number | null, type: string): number;
+  /** Creates and configures a circuit below a distribution board as one undoable change. */
+  addCircuit(boardId: string, changes: Readonly<CircuitPropertyChanges>): number;
   insertItemBefore(itemId: number, type: string): number;
   addSituationOnlyItem(type: string): number;
   deleteItem(itemId: number): void;

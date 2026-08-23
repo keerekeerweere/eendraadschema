@@ -1,9 +1,9 @@
-import { useEffect } from "react";
 import type { WorkspaceStore, WorkspaceTab } from "../../application/WorkspaceStore";
 import { useWorkspaceSnapshot } from "../useWorkspaceSnapshot";
 
 interface WorkspaceHeaderProps {
   readonly itemCount: number;
+  readonly openIssueCount?: number;
   readonly store: WorkspaceStore;
   readonly onSelectTab: (tab: WorkspaceTab) => void;
 }
@@ -14,34 +14,8 @@ function itemCountLabel(itemCount: number): string {
     : `${itemCount} elektrische onderdelen`;
 }
 
-export function WorkspaceHeader({ itemCount, store, onSelectTab }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({ itemCount, openIssueCount = 0, store, onSelectTab }: WorkspaceHeaderProps) {
   const { activeTab } = useWorkspaceSnapshot(store);
-  useEffect(() => {
-    const menu = document.getElementById("minitabs");
-    if (!menu) return;
-    const hiddenItems = new Set<HTMLLIElement>();
-
-    const hideDuplicateWorkspaceLinks = () => {
-      for (const control of Array.from(menu.querySelectorAll("a, button"))) {
-        if (control.textContent === "Eéndraadschema" || control.textContent === "Situatieschema") {
-          const listItem = control.closest("li");
-          if (listItem instanceof HTMLLIElement) {
-            listItem.style.display = "none";
-            hiddenItems.add(listItem);
-          }
-        }
-      }
-    };
-    const observer = new MutationObserver(hideDuplicateWorkspaceLinks);
-    observer.observe(menu, { childList: true, subtree: true });
-    hideDuplicateWorkspaceLinks();
-
-    return () => {
-      observer.disconnect();
-      for (const listItem of hiddenItems) listItem.style.removeProperty("display");
-    };
-  }, []);
-
   const tabClass = (tab: WorkspaceTab) => [
     "h-full border-b-2 px-4 text-sm font-semibold transition-colors",
     tab === activeTab
@@ -50,13 +24,21 @@ export function WorkspaceHeader({ itemCount, store, onSelectTab }: WorkspaceHead
   ].join(" ");
 
   return (
-    <header className="flex h-[var(--react-shell-height)] items-stretch justify-between overflow-hidden border-b border-neutral-300 bg-white text-neutral-900">
-      <div className="flex min-w-72 items-center gap-5 px-4">
+    <header className="flex h-[var(--react-shell-height)] items-stretch justify-between gap-3 overflow-hidden border-b border-neutral-300 bg-white text-neutral-900">
+      <div className="flex min-w-0 items-center gap-3 px-4">
         <div className="flex flex-col leading-tight">
           <span className="text-xs tracking-wide text-neutral-500 uppercase">Werkruimte</span>
-          <strong>Elektrisch dossier</strong>
+          <strong className="whitespace-nowrap">Elektrisch dossier</strong>
         </div>
-        <nav className="flex h-full items-stretch" aria-label="Werkruimteweergave">
+        <nav className="flex h-full min-w-0 items-stretch overflow-x-auto" aria-label="Werkruimteweergave">
+          <button
+            type="button"
+            className={tabClass("dossier")}
+            aria-current={activeTab === "dossier" ? "page" : undefined}
+            onClick={() => onSelectTab("dossier")}
+          >
+            Dossier
+          </button>
           <button
             type="button"
             className={tabClass("schema")}
@@ -83,9 +65,12 @@ export function WorkspaceHeader({ itemCount, store, onSelectTab }: WorkspaceHead
           </button>
         </nav>
       </div>
-      <p className="m-0 flex items-center px-4 text-sm text-neutral-500" role="status" aria-live="polite">
-        {itemCountLabel(itemCount)}
-      </p>
+      <div className="hidden shrink-0 items-center gap-2 px-4 text-sm text-neutral-500 lg:flex" role="status" aria-live="polite">
+        <span className="whitespace-nowrap">{itemCountLabel(itemCount)}</span>
+        <span className={openIssueCount === 0 ? "whitespace-nowrap rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800" : "whitespace-nowrap rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900"}>
+          {openIssueCount === 0 ? "Dossier volledig" : `${openIssueCount} aandachtspunten`}
+        </span>
+      </div>
     </header>
   );
 }

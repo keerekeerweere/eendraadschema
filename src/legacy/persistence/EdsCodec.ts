@@ -190,7 +190,7 @@ export function structureFromJson(
   }
 
   if (input.sitplanjson !== undefined) {
-    output.sitplan = new SituationPlan();
+    output.sitplan = new SituationPlan(output);
     output.sitplan.fromJsonObject(input.sitplanjson);
   }
 

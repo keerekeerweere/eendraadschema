@@ -18,6 +18,28 @@ export interface SituationPlanElementUpdate {
   readonly changes: SituationPlanElementChanges;
 }
 
+export interface AddSituationOccurrenceProperties {
+  readonly itemId: number;
+  readonly page: number;
+  readonly position: Readonly<{ x: number; y: number }>;
+  readonly addressType: AdresType;
+  readonly address: string;
+  readonly addressLocation: AdresLocation;
+  readonly labelFontSize: number;
+  readonly scale: number;
+  readonly rotation: number;
+}
+
+export interface AddSituationCustomElementProperties {
+  readonly page: number;
+  readonly position: Readonly<{ x: number; y: number }>;
+  readonly size: Readonly<{ width: number; height: number }>;
+  readonly labelFontSize: number;
+  readonly scale: number;
+  readonly rotation: number;
+  readonly svg: string;
+}
+
 export type SituationPlanAlignment =
   | "left"
   | "horizontal-center"
@@ -54,12 +76,23 @@ export interface SituationPlanSnapshot {
 }
 
 export interface SituationPlanCommands {
+  undo(): void;
+  redo(): void;
   selectPage(page: number): void;
   addPage(): number;
   deletePage(page: number): void;
   updateDefaults(changes: Partial<SituationPlanDefaults>): void;
+  addOccurrence(properties: AddSituationOccurrenceProperties): string;
+  addCustomElement(properties: AddSituationCustomElementProperties): string;
   updateElement(elementId: string, changes: SituationPlanElementChanges): void;
   updateElements(updates: readonly SituationPlanElementUpdate[]): void;
+  translateElements(
+    elementIds: readonly string[],
+    offset: Readonly<{ x: number; y: number }>,
+    historyKey: string,
+  ): void;
+  sendElementsToBack(elementIds: readonly string[]): void;
+  bringElementsToFront(elementIds: readonly string[]): void;
   alignElements(elementIds: readonly string[], alignment: SituationPlanAlignment): void;
   distributeElements(elementIds: readonly string[], axis: SituationPlanDistributionAxis): void;
   duplicateElements(

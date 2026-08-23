@@ -12,15 +12,15 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  delete (globalThis as { structure?: unknown }).structure;
 });
 
 function createState() {
   const structure = loadFixture("example001.eds");
-  globalThis.structure = structure;
+  const schemaStore = new LegacySchemaStore(structure);
+  schemaStore.commands.addItem(null, "Zekering/differentieel");
   return {
     editorStore: new LocalEditorStore(),
-    schemaStore: new LegacySchemaStore(structure),
+    schemaStore,
   };
 }
 

@@ -371,10 +371,7 @@ export class Print_Table {
      * Returns true if the current page range is valid and can be printed.
      */
     canPrint(pageRange: string = this.printPageRange ?? "", maxPage?: number): boolean {
-        const availablePages = maxPage ?? (
-            globalThis.structure.print_table.pages.length
-            + (globalThis.structure.sitplan ? globalThis.structure.sitplan.getNumPages() : 0)
-        );
+        const availablePages = maxPage ?? this.pages.length;
         const [isValid] = Print_Table.isValidPageRange(pageRange, availablePages);
         return isValid;
     }

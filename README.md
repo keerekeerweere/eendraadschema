@@ -30,6 +30,13 @@ The default build configuration is only provided as an example.
 An external MCP client can inspect the live electrical graph and submit a reviewed change proposal.
 This is deliberately local-only: start `npm run mcp:serve`, open the app with `?mcp=on`, then configure the MCP client to run `npm run mcp:stdio` in this repository. The browser asks for approval before applying a proposal; accepted proposals are one undoable document change.
 
+## Product and user-flow documentation
+
+The detailed Dutch/Flemish product vision is maintained in
+[`docs/gebruiksvisie`](docs/gebruiksvisie/README.md). It describes the intended
+end-to-end user flow, the relationship between the three views, MCP-assisted
+editing, and the decisions that should be revisited as the application evolves.
+
 ## License
 
 See LICENSE.md

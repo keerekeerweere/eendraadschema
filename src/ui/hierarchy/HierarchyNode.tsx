@@ -5,6 +5,7 @@ import type { SchemaStore } from "../../application/SchemaStore";
 import { AddItemControl } from "./AddItemControl";
 import { getEditableChildren, type HierarchyIndex } from "./hierarchyModel";
 import { cx, ui } from "../uiStyles";
+import { GroupedItemTypeOptions } from "./GroupedItemTypeOptions";
 
 interface HierarchyNodeProps {
   readonly node: HierarchyViewNode;
@@ -97,8 +98,8 @@ export function HierarchyNode({
     <li className="my-1">
       <div
         className={cx(
-          "grid grid-cols-[2rem_minmax(8rem,1fr)_minmax(8rem,auto)_auto] items-stretch gap-1 rounded-md border border-neutral-300 p-1 [margin-left:calc(var(--hierarchy-depth)*1.25rem)] max-[52rem]:grid-cols-[2rem_minmax(8rem,1fr)]",
-          selected && "border-blue-700 ring-2 ring-blue-700/20",
+          "grid grid-cols-[1.75rem_minmax(0,1fr)] items-stretch gap-1 rounded-md border border-transparent px-1 py-0.5 [margin-left:calc(var(--hierarchy-depth)*0.625rem)] hover:border-neutral-200 hover:bg-neutral-50",
+          selected && "border-blue-700 bg-blue-50 ring-2 ring-blue-700/15",
         )}
         style={{ "--hierarchy-depth": depth } as React.CSSProperties}
       >
@@ -126,19 +127,19 @@ export function HierarchyNode({
           {node.description ? <small className="truncate text-neutral-500">{node.description}</small> : null}
         </button>
 
-        <label className="self-center max-[52rem]:col-start-2">
+      {selected ? <label className="col-start-2 min-w-0 self-center">
           <span className="sr-only">Type van {node.label}</span>
           <select
-            className={cx(ui.field, "max-w-52")}
+            className={cx(ui.field, "max-w-full")}
             aria-label={`Type van ${node.label}`}
             value={node.type}
             onChange={(event) => runCommand(() => schemaStore.commands.changeItemType(node.id, event.target.value))}
           >
-            {node.capabilities.allowedItemTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+            <GroupedItemTypeOptions types={node.capabilities.allowedItemTypes} />
           </select>
-        </label>
+        </label> : null}
 
-        <div className="flex flex-wrap items-center gap-1 max-[52rem]:col-start-2" aria-label={`Acties voor ${node.label}`}>
+        {selected ? <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-1" aria-label={`Acties voor ${node.label}`}>
           <button
             className={ui.button}
             type="button"
@@ -193,10 +194,10 @@ export function HierarchyNode({
               });
             }}
           >Verwijderen</button>
-        </div>
+        </div> : null}
       </div>
 
-      {node.capabilities.canAddChild ? (
+      {selected && node.capabilities.canAddChild ? (
         <AddItemControl
           label={`Onderdeel toevoegen onder ${node.label}`}
           allowedTypes={node.capabilities.allowedChildTypes}

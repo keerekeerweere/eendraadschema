@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import type { LegacyPrintService } from "../../application/PrintService";
+import type { PrintService } from "../../application/PrintService";
+import type { SvgExportService } from "../../application/SvgExportService";
 import type { DossierIssue } from "../../application/DossierReader";
 
 interface PrintDialogProps {
-  readonly printService: LegacyPrintService;
-  readonly onDownloadSvg: (svg: string, filename: string) => void;
+  readonly printService: PrintService;
+  readonly svgExportService: SvgExportService;
   readonly onClose: () => void;
   readonly dossierIssues?: readonly DossierIssue[];
 }
 
-export function PrintDialog({ printService, onDownloadSvg, onClose, dossierIssues = [] }: PrintDialogProps) {
+export function PrintDialog({ printService, svgExportService, onClose, dossierIssues = [] }: PrintDialogProps) {
   const [, setRevision] = useState(0);
   const [pdfFilename, setPdfFilename] = useState("eendraadschema_print.pdf");
   const [svgFilename, setSvgFilename] = useState("eendraadschema_print.svg");
@@ -238,7 +239,7 @@ export function PrintDialog({ printService, onDownloadSvg, onClose, dossierIssue
             </label>
             <div className="flex gap-2">
               <input className="rounded border border-neutral-300 px-3 py-2 text-sm" aria-label="SVG-bestandsnaam" value={svgFilename} onChange={event => setSvgFilename(event.target.value)} />
-              <button type="button" className="rounded border border-neutral-300 px-3 py-2 text-sm font-semibold hover:bg-neutral-50" disabled={!previewSvg} onClick={() => onDownloadSvg(previewSvg, svgFilename)}>
+              <button type="button" className="rounded border border-neutral-300 px-3 py-2 text-sm font-semibold hover:bg-neutral-50" disabled={!previewSvg} onClick={() => svgExportService.download(previewSvg, svgFilename)}>
                 SVG downloaden
               </button>
             </div>

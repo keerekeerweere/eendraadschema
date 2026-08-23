@@ -1,10 +1,50 @@
 # Current architecture and incremental React migration inventory
 
-Status: Living inventory through the React editor, distribution-board and legacy hierarchy-renderer migration (7 August 2026).
+Status: Living inventory through the unified React workspace and legacy-boundary migration (17 August 2026).
 
 For a concise continuation checklist, read [`migration-handoff.md`](migration-handoff.md) first.
 
 ## Current migration state
+
+### Active boundary — 17 August 2026
+
+The historical phase inventory below is retained for compatibility decisions, but its descriptions of visible legacy navigation are no longer current.
+
+- React owns the workspace header, tabs, command bar, hierarchy, contextual inspector, dossier, board layout, new-document flow, file/print dialogs, documentation and contact.
+- `WorkspaceStore` is the only owner of the active workspace and host visibility. `WorkspaceChromeController` maps that state to the remaining schema SVG and situation canvas hosts.
+- The imperative `TopMenu`, old schema/situation entries and complete legacy ribbon DOM host have been removed. React owns the compact application menu and its Help dropdown.
+- `WorkspaceViewAdapter` separates navigation from legacy rendering. React selects a tab; the adapter may only prepare its renderer.
+- `WorkspaceHistoryAdapter` is the single React-facing undo/redo route. Situation commands record history inside `LegacySituationPlanStore`; `SituationPlanView` no longer writes to `globalThis.undostruct` directly.
+- Situation creation, custom/background placement, pointer dragging and stacking changes use validated `SituationPlanStore` commands. One drag gesture is one mergeable history transaction, and the domain element order drives canvas, persistence and print stacking.
+- Situation placement IDs persist across EDS and history reconstruction. Legacy files without IDs remain valid; malformed duplicates receive safe unique IDs, allowing React selection and cross-view links to survive undo/redo.
+- `SituationPlanView` publishes selection through a typed `{ elementIds, primaryElementId }` callback and restores valid IDs across redraw. The React keyboard bridge no longer scans `.selected` classes or uses a `MutationObserver` as an application-state channel.
+- Situation label positions are explicitly renderer-derived state: the established EDS keys remain intact, while canvas measurement is the only write boundary and print/store code reads the encapsulated value.
+- `SituationCanvasAdapter` is the only React-facing imperative situation-canvas boundary. It owns reveal, occurrence creation, selection, ordering and zoom translation.
+- `FileService`, `PrintService` and `SvgExportService` are interface boundaries. The deleted `src/print/print.ts` singleton has been replaced by composition-root construction.
+- `DocumentHost` owns the current compatibility document. EDS open/replace/append, autosave and undo reconstruction cross an injected lifecycle port; production no longer publishes or reads a `globalThis.structure` mirror.
+- The compatibility undo controller has no global document fallback either: callers must inject both current-document access and reconstruction. Static workspace mount points live declaratively in `index.html`, outside the composition root.
+- `SchematicViewport` owns the visible one-line guidance, SVG host, legend and footer. `LegacySchematicRenderStore` evaluates the established renderer outside React and publishes a stable derived snapshot; React never calls the stateful compatibility renderer during component render. The old hidden hierarchy column and imperative viewport `innerHTML` path have been removed.
+- `SituationPlan`, `SituationPlanElement`, `MouseDrag`, SVG page-marker generation and situation selection-history hooks receive their document/store/callback dependency explicitly. The old item finder, property popups, context menu and duplicate situation keyboard handler were removed after React reached feature coverage.
+- The obsolete no-op situation sidebar and its global handlers are gone. Canvas preparation runs after React host visibility, refuses invalid hidden-host zoom measurements and uses live canvas bounds for mouse coordinates.
+- React owns onboarding, autosave-recovery notices and the older-switch-symbol compatibility choice through `LocalNoticeStore`; no imperative modal writes raw HTML into `document.body`.
+- Situation address labels are written as text rather than parsed HTML. Raw markup is now limited to generated electrical/situation SVG at the renderer boundary.
+- Browser compatibility coverage opens the checked-in EDS004 uncommon-item fixture through the real file input, verifies its existing situation placement, saves and reopens the downloaded payload, and validates downloaded SVG and PDF signatures. This matrix also guards the legacy switch-symbol inspection path for imported plans.
+- The authoritative electrical write model is still `Hierarchical_List` behind `LegacySchemaStore`; replacing its mutable parallel arrays remains a later model migration, not a UI prerequisite.
+
+Current runtime direction:
+
+```text
+React workspace
+  -> WorkspaceStore / EditorStore
+  -> SchemaStore and SituationPlanStore commands
+  -> WorkspaceViewAdapter / WorkspaceHistoryAdapter / SituationCanvasAdapter
+  -> DocumentHost
+  -> Hierarchical_List compatibility model
+
+File / autosave / print / SVG
+  -> typed service interfaces
+  -> DocumentHost snapshot
+```
 
 The original Phase 0 inventory below is retained as historical context. The active architecture now has these boundaries:
 
@@ -17,9 +57,9 @@ The original Phase 0 inventory below is retained as historical context. The acti
 - the React board navigator supports board selection, feeder/cable editing, document details and structural validation in Belgian Dutch.
 - the existing SVG/print engine remains authoritative. Board name, location and feeder metadata are added at the existing `Bord` SVG adapter without rewriting electrical symbols or pagination.
 
-Remaining legacy UI is deliberately outside the migrated one-line editor: file/configuration pages, print controls and the interactive situation-plan view still use imperative DOM rendering. Persistence codecs, SVG generation, PDF export and situation-plan behavior remain compatibility code rather than React concerns.
+The remaining visible legacy UI is limited to the situation canvas renderer and the generated eendraadschema SVG. Startup, help, file/print controls and all workspace navigation are React-owned. Persistence codecs, SVG generation and PDF export remain compatibility infrastructure behind typed services.
 
-This note records the current boundaries before React or a new command layer is introduced. It is intentionally descriptive: no implementation behavior is changed in Phase 0.
+The sections below retain the original Phase 0 inventory for compatibility archaeology. Statements about visible configuration pages, ribbons, feature flags and generated hierarchy forms are historical unless the active-boundary section above says otherwise.
 
 ## Runtime overview
 

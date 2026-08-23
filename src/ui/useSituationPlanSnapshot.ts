@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import type {
   SituationPlanSnapshot,
   SituationPlanStore,
@@ -10,4 +10,15 @@ export function useSituationPlanSnapshot(store: SituationPlanStore): SituationPl
     store.getSnapshot.bind(store),
     store.getSnapshot.bind(store),
   );
+}
+
+export function useOptionalSituationPlanSnapshot(
+  store: SituationPlanStore | null,
+): SituationPlanSnapshot | null {
+  const subscribe = useCallback(
+    (listener: () => void) => store?.subscribe(listener) ?? (() => {}),
+    [store],
+  );
+  const getSnapshot = useCallback(() => store?.getSnapshot() ?? null, [store]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

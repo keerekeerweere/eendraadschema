@@ -10,16 +10,33 @@ beforeEach(() => {
 
 function createStore() {
   const structure = loadFixture("example001.eds");
-  globalThis.structure = structure;
   const mutationCommitted = vi.fn();
+  const undo = vi.fn();
+  const redo = vi.fn();
   return {
     structure,
     mutationCommitted,
-    store: new LegacySituationPlanStore(structure, mutationCommitted),
+    undo,
+    redo,
+    store: new LegacySituationPlanStore(structure, {
+      record: mutationCommitted,
+      undo,
+      redo,
+    }),
   };
 }
 
 describe("LegacySituationPlanStore", () => {
+  it("routes undo and redo through the injected history port", () => {
+    const { redo, store, undo } = createStore();
+
+    store.commands.undo();
+    store.commands.redo();
+
+    expect(undo).toHaveBeenCalledOnce();
+    expect(redo).toHaveBeenCalledOnce();
+  });
+
   it("exposes an immutable, DOM-independent snapshot", () => {
     const { structure, store } = createStore();
     const element = new SituationPlanElement();
@@ -71,6 +88,11 @@ describe("LegacySituationPlanStore", () => {
     expect(store.getSnapshot()).toMatchObject({ revision: 3, pageCount: 1, activePage: 1 });
     expect(listener).toHaveBeenCalledTimes(3);
     expect(mutationCommitted).toHaveBeenCalledTimes(3);
+    expect(mutationCommitted.mock.calls).toEqual([
+      [undefined],
+      ["changePage"],
+      [undefined],
+    ]);
   });
 
   it("rejects invalid pages and defaults without publishing", () => {
@@ -130,6 +152,56 @@ describe("LegacySituationPlanStore", () => {
     expect(mutationCommitted).toHaveBeenCalledOnce();
   });
 
+  it("creates linked and custom placements as recorded store transactions", () => {
+    const { structure, mutationCommitted, store } = createStore();
+    const item = structure.data.find(candidate => candidate.props.type === "Contactdoos")!;
+    structure.placementTasks = [{
+      id: "place-contactdoos",
+      itemId: item.id,
+      destination: "situation",
+    }];
+
+    const occurrenceId = store.commands.addOccurrence({
+      itemId: item.id,
+      page: 1,
+      position: { x: 25, y: 40 },
+      addressType: "auto",
+      address: "",
+      addressLocation: "rechts",
+      labelFontSize: 11,
+      scale: 0.7,
+      rotation: 0,
+    });
+    const customId = store.commands.addCustomElement({
+      page: 1,
+      position: { x: 100, y: 120 },
+      size: { width: 200, height: 100 },
+      labelFontSize: 11,
+      scale: 0.5,
+      rotation: 0,
+      svg: '<svg width="200" height="100"></svg>',
+    });
+
+    expect(store.getSnapshot().elements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: occurrenceId, electroItemId: item.id }),
+      expect.objectContaining({ id: customId, svg: '<svg width="200" height="100"></svg>' }),
+    ]));
+    expect(structure.placementTasks).toHaveLength(0);
+    expect(mutationCommitted).toHaveBeenCalledTimes(2);
+
+    expect(() => store.commands.addCustomElement({
+      page: 1,
+      position: { x: 0, y: 0 },
+      size: { width: 0, height: 100 },
+      labelFontSize: 11,
+      scale: 1,
+      rotation: 0,
+      svg: "",
+    })).toThrowError(expect.objectContaining<Partial<SituationPlanCommandError>>({
+      code: "INVALID_ELEMENT_CHANGE",
+    }));
+  });
+
   it("rejects invalid placement changes without publishing", () => {
     const { structure, store } = createStore();
     const element = new SituationPlanElement();
@@ -174,6 +246,67 @@ describe("LegacySituationPlanStore", () => {
     expect(store.getSnapshot().elements[0].rotation).toBe(0);
   });
 
+  it("translates a drag selection through one mergeable command key", () => {
+    const { structure, mutationCommitted, store } = createStore();
+    const first = new SituationPlanElement();
+    const second = new SituationPlanElement();
+    first.posx = 10;
+    first.posy = 20;
+    second.posx = 30;
+    second.posy = 40;
+    structure.sitplan.addElement(first);
+    structure.sitplan.addElement(second);
+    store.synchronizeLegacyDocument();
+    mutationCommitted.mockClear();
+
+    store.commands.translateElements([first.id, second.id], { x: 5, y: -2 }, "drag-1");
+
+    expect(store.getSnapshot().elements.map(element => element.position)).toEqual([
+      { x: 15, y: 18 },
+      { x: 35, y: 38 },
+    ]);
+    expect(mutationCommitted).toHaveBeenCalledWith("drag-1");
+    expect(() => store.commands.translateElements([first.id], { x: Number.NaN, y: 0 }, "drag-2"))
+      .toThrowError(expect.objectContaining<Partial<SituationPlanCommandError>>({
+        code: "INVALID_ELEMENT_CHANGE",
+      }));
+  });
+
+  it("moves movable placements between stacking edges while preserving relative order", () => {
+    const { structure, mutationCommitted, store } = createStore();
+    const first = new SituationPlanElement();
+    const second = new SituationPlanElement();
+    const locked = new SituationPlanElement();
+    locked.movable = false;
+    structure.sitplan.addElement(first);
+    structure.sitplan.addElement(second);
+    structure.sitplan.addElement(locked);
+    store.synchronizeLegacyDocument();
+    mutationCommitted.mockClear();
+
+    store.commands.bringElementsToFront([first.id]);
+    expect(store.getSnapshot().elements.map(element => element.id)).toEqual([
+      second.id,
+      locked.id,
+      first.id,
+    ]);
+
+    store.commands.sendElementsToBack([first.id]);
+    expect(store.getSnapshot().elements.map(element => element.id)).toEqual([
+      first.id,
+      second.id,
+      locked.id,
+    ]);
+
+    store.commands.bringElementsToFront([locked.id]);
+    expect(store.getSnapshot().elements.map(element => element.id)).toEqual([
+      first.id,
+      second.id,
+      locked.id,
+    ]);
+    expect(mutationCommitted).toHaveBeenCalledTimes(2);
+  });
+
   it("aligns, distributes, and duplicates selected placements", () => {
     const { structure, store } = createStore();
     const elements = [0, 40, 100].map((x, index) => {
@@ -214,5 +347,23 @@ describe("LegacySituationPlanStore", () => {
 
     expect(store.getSnapshot().elements.map(element => element.id)).toEqual([locked.id]);
     expect(store.commands.deleteElements([locked.id])).toEqual([]);
+  });
+
+  it("deletes a situation-only graph item in the same recorded transaction", () => {
+    const { mutationCommitted, store, structure } = createStore();
+    const container = structure.createContainerIfNotExists();
+    const item = structure.createItem("Aardingsonderbreker");
+    structure.insertChildAfterId(item, container.id);
+    const element = new SituationPlanElement();
+    element.setElectroItemId(item.id);
+    structure.sitplan.addElement(element);
+    store.synchronizeLegacyDocument();
+    mutationCommitted.mockClear();
+
+    expect(store.commands.deleteElements([element.id])).toEqual([item.id]);
+
+    expect(structure.getElectroItemById(item.id)).toBeNull();
+    expect(store.getSnapshot().elements).toHaveLength(0);
+    expect(mutationCommitted).toHaveBeenCalledOnce();
   });
 });

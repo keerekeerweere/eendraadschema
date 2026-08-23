@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { EditorStore } from "../../application/EditorStore";
 import type { SchemaStore } from "../../application/SchemaStore";
-import type { SituationPlanStore } from "../../application/SituationPlanStore";
 import { useEditorSnapshot } from "../useEditorSnapshot";
 import { useSchemaSnapshot } from "../useSchemaSnapshot";
 import { BoardBreadcrumbs } from "../boards/BoardBreadcrumbs";
@@ -9,8 +8,6 @@ import { BoardNavigator } from "../boards/BoardNavigator";
 import { AddItemControl } from "./AddItemControl";
 import { HierarchyNode } from "./HierarchyNode";
 import { HierarchySearch } from "./HierarchySearch";
-import { SituationLinksPanel } from "../workspace/SituationLinksPanel";
-import { DossierOverview } from "../workspace/DossierOverview";
 import {
   createHierarchyIndex,
   getEditableChildren,
@@ -22,11 +19,6 @@ export interface HierarchyTreeProps {
   readonly schemaStore: SchemaStore;
   readonly editorStore: EditorStore;
   readonly confirmDelete?: (label: string) => boolean;
-  readonly situationPlanStore?: SituationPlanStore | null;
-  readonly canCreateSituationOccurrence?: (itemId: number) => boolean;
-  readonly onCreateSituationOccurrence?: (itemId: number) => void;
-  readonly onRevealSituationOccurrence?: (occurrenceId: string) => void;
-  readonly onRevealBoardItem?: (itemId: number) => void;
 }
 
 function browserConfirmDelete(label: string): boolean {
@@ -37,11 +29,6 @@ export function HierarchyTree({
   schemaStore,
   editorStore,
   confirmDelete = browserConfirmDelete,
-  situationPlanStore = null,
-  canCreateSituationOccurrence = () => false,
-  onCreateSituationOccurrence = () => {},
-  onRevealSituationOccurrence = () => {},
-  onRevealBoardItem = () => {},
 }: HierarchyTreeProps) {
   const schemaSnapshot = useSchemaSnapshot(schemaStore);
   const editorSnapshot = useEditorSnapshot(editorStore);
@@ -92,7 +79,7 @@ export function HierarchyTree({
   }
 
   return (
-    <nav className="min-w-80 p-4 text-neutral-800 max-[52rem]:min-w-0" aria-labelledby="react-hierarchy-title">
+    <nav className="min-w-0 p-3 text-neutral-800" aria-labelledby="react-hierarchy-title">
       <BoardNavigator
         schemaStore={schemaStore}
         editorStore={editorStore}
@@ -101,19 +88,7 @@ export function HierarchyTree({
         validationIssues={schemaSnapshot.validationIssues}
         reportError={setErrorMessage}
       />
-      <DossierOverview schemaStore={schemaStore} situationPlanStore={situationPlanStore} />
       <HierarchySearch document={hierarchyDocument} editorStore={editorStore} />
-      {situationPlanStore ? (
-        <SituationLinksPanel
-          schemaStore={schemaStore}
-          editorStore={editorStore}
-          situationPlanStore={situationPlanStore}
-          canCreateOccurrence={canCreateSituationOccurrence}
-          onCreateOccurrence={onCreateSituationOccurrence}
-          onRevealOccurrence={onRevealSituationOccurrence}
-          onRevealBoardItem={onRevealBoardItem}
-        />
-      ) : null}
       <BoardBreadcrumbs
         document={hierarchyDocument}
         activeBoardId={activeBoardId}
@@ -131,19 +106,9 @@ export function HierarchyTree({
             onAdd={addRootItem}
           />
         ) : null}
-        <div className="ml-auto flex flex-wrap items-center gap-1" aria-label="Bewerkingsgeschiedenis">
-          <button
-            className={ui.button}
-            type="button"
-            disabled={!schemaSnapshot.canUndo}
-            onClick={() => runHistoryCommand(schemaStore.commands.undo)}
-          >Ongedaan maken</button>
-          <button
-            className={ui.button}
-            type="button"
-            disabled={!schemaSnapshot.canRedo}
-            onClick={() => runHistoryCommand(schemaStore.commands.redo)}
-          >Opnieuw</button>
+        <div className="ml-auto flex gap-1" aria-label="Bewerkingsgeschiedenis">
+          <button className={`${ui.button} min-w-8 px-2`} type="button" aria-label="Ongedaan maken" title="Ongedaan maken" disabled={!schemaSnapshot.canUndo} onClick={() => runHistoryCommand(schemaStore.commands.undo)}>↶</button>
+          <button className={`${ui.button} min-w-8 px-2`} type="button" aria-label="Opnieuw" title="Opnieuw" disabled={!schemaSnapshot.canRedo} onClick={() => runHistoryCommand(schemaStore.commands.redo)}>↷</button>
         </div>
       </header>
 

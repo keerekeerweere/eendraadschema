@@ -177,7 +177,6 @@ export class AutoSaver {
                 } catch (error) {
                     console.error("Error saving to IndexedDB:", error);
                 } finally {
-                    //this.getStructure().updateRibbon();
                     if (this.callbackAfterSave) this.callbackAfterSave();
                 }
             })();
@@ -207,7 +206,6 @@ export class AutoSaver {
                 console.error("Error saving to IndexedDB:", error);
             } finally {
                 if (this.callbackAfterSave) this.callbackAfterSave();
-                //this.getStructure().updateRibbon();
             }
         })();
         this.reset();

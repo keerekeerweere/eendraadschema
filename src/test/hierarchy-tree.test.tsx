@@ -98,7 +98,9 @@ describe("HierarchyTree", () => {
     editorStore.commands.expandItem(circuit.id);
     render(<HierarchyTree schemaStore={schemaStore} editorStore={editorStore} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Kring G" }));
     const addSelect = screen.getByLabelText("Onderdeel toevoegen onder Kring G");
+    expect(addSelect.querySelectorAll("optgroup").length).toBeGreaterThan(2);
     fireEvent.change(addSelect, { target: { value: "Lichtpunt" } });
     fireEvent.click(within(addSelect.closest("div")!).getByRole("button", { name: "Toevoegen" }));
 
@@ -108,6 +110,7 @@ describe("HierarchyTree", () => {
     expect(light).toBeDefined();
     expect(editorStore.getSnapshot().selectedItemId).toBe(light?.id);
 
+    fireEvent.click(screen.getByRole("button", { name: /Contactdoos \d+/ }));
     fireEvent.click(screen.getByRole("button", { name: /Contactdoos \d+ dupliceren/ }));
     expect(schemaStore.getSnapshot().document.getChildren(circuit.id)
       .filter((item) => item.type === "Contactdoos")).toHaveLength(2);
@@ -119,6 +122,7 @@ describe("HierarchyTree", () => {
     editorStore.commands.expandItem(circuit.id);
     render(<HierarchyTree schemaStore={schemaStore} editorStore={editorStore} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Contactdoos 1" }));
     fireEvent.change(screen.getByLabelText("Type van Contactdoos 1"), {
       target: { value: "Lichtcircuit" },
     });
@@ -167,6 +171,7 @@ describe("HierarchyTree", () => {
     editorStore.commands.expandItem(circuit.id);
     render(<HierarchyTree schemaStore={schemaStore} editorStore={editorStore} />);
 
+    fireEvent.click(screen.getByRole("button", { name: /Contactdoos \d+/ }));
     fireEvent.click(screen.getByRole("button", { name: /Contactdoos \d+ omhoog verplaatsen/ }));
     expect(schemaStore.getSnapshot().document.getItem(circuit.id)?.childIds).toEqual([
       socket.id,

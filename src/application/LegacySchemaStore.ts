@@ -22,7 +22,7 @@ import { LegacySchemaDocumentReader } from "./LegacySchemaDocumentReader";
 import { LegacySchemaPropertyReader } from "./LegacySchemaPropertyReader";
 import { validateSchemaDocument } from "./SchemaValidation";
 import { parseDossierMetadata, type PlacementTaskDestination } from "../domain/Dossier";
-import { getItemPresentation } from "./DossierReader";
+import { getItemPresentation } from "./InstallationItemPolicy";
 import type {
   BasicConsumerPropertyChanges,
   CircuitPropertyChanges,
@@ -65,6 +65,7 @@ export class LegacySchemaStore implements SchemaStore {
     this.snapshot = this.createSnapshot();
     this.commands = Object.freeze({
       addItem: this.addItem.bind(this),
+      addCircuit: this.addCircuit.bind(this),
       insertItemBefore: this.insertItemBefore.bind(this),
       addSituationOnlyItem: this.addSituationOnlyItem.bind(this),
       deleteItem: this.deleteItem.bind(this),
@@ -146,6 +147,36 @@ export class LegacySchemaStore implements SchemaStore {
 
       this.createRequiredPlacementTask(item.id, item.getType());
       return item.id;
+    });
+  }
+
+  private addCircuit(boardId: string, changes: Readonly<CircuitPropertyChanges>): number {
+    const board = this.requireBoard(boardId);
+    const document = new LegacySchemaDocumentReader(this.structure);
+    const parentNode = document.getAllItems().find((item) => (
+      item.type === "Bord"
+      && document.getBoardForItem(item.id)?.id === boardId
+      && item.capabilities.allowedChildTypes.includes("Kring")
+    ));
+    const parent = parentNode ? this.requireItem(parentNode.id) : undefined;
+    if (!parent) {
+      throw new SchemaCommandError(
+        "INVALID_CHILD_TYPE",
+        `Bord '${board.name}' heeft geen bordelement waaronder een kring kan worden toegevoegd.`,
+      );
+    }
+    this.assertParentCapacity(parent);
+    const legacyChanges = validateAndMapCircuitChanges(changes);
+
+    return this.commitTransaction(() => {
+      const placeholder = this.structure.createItem("");
+      this.structure.insertChildAfterId(placeholder, parent.id);
+      this.structure.adjustTypeById(placeholder.id, "Kring");
+      const circuit = this.requireItem(placeholder.id);
+      for (const [key, value] of Object.entries(legacyChanges)) circuit.props[key] = value;
+      circuit.normalizeProperties();
+      this.createRequiredPlacementTask(circuit.id, circuit.getType());
+      return circuit.id;
     });
   }
 

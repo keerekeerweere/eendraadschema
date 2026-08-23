@@ -2,9 +2,13 @@ import type { BoardLayout } from "../domain/BoardLayout";
 import type { PlacementTask } from "../domain/Dossier";
 import type { SchemaSnapshot } from "./SchemaStore";
 import type { SituationPlanSnapshot } from "./SituationPlanStore";
+import {
+  getInstallationItemPolicy,
+  type InstallationItemPresentation,
+} from "./InstallationItemPolicy";
 
-/** How an electrical item is represented outside the generated one-line graph. */
-export type InstallationItemPresentation = "field-device" | "panel-device" | "structural";
+export { getItemPresentation } from "./InstallationItemPolicy";
+export type { InstallationItemPresentation } from "./InstallationItemPolicy";
 
 export interface DossierItemLink {
   readonly itemId: number;
@@ -27,22 +31,6 @@ export interface DossierIssue {
 export interface DossierSnapshot {
   readonly items: readonly DossierItemLink[];
   readonly issues: readonly DossierIssue[];
-}
-
-const STRUCTURAL_TYPES = new Set([
-  "Aansluiting", "Aardingsonderbreker", "Bord", "Container", "Kring", "Leiding",
-  "Splitsing", "Verlenging", "Vrije tekst", "Vrije ruimte", "Zekering/differentieel",
-]);
-
-const PANEL_TYPES = new Set([
-  "Aansluiting", "Aardingsonderbreker", "Bord", "Domotica", "Domotica module (verticaal)",
-  "Elektriciteitsmeter", "Overspanningsbeveiliging", "Transformator", "Zekering/differentieel",
-]);
-
-export function getItemPresentation(type: string): InstallationItemPresentation {
-  if (PANEL_TYPES.has(type)) return "panel-device";
-  if (STRUCTURAL_TYPES.has(type)) return "structural";
-  return "field-device";
 }
 
 /**
@@ -73,7 +61,8 @@ export function createDossierSnapshot(
 
   for (const item of schema.document.getAllItems()) {
     if (item.role !== "item") continue;
-    const presentation = getItemPresentation(item.type);
+    const policy = getInstallationItemPolicy(item.type);
+    const presentation = policy.presentation;
     const occurrences = Object.freeze([...(byItemId.get(item.id) ?? [])]);
     const link: DossierItemLink = Object.freeze({
       itemId: item.id,
@@ -85,11 +74,11 @@ export function createDossierSnapshot(
       placementTasks: Object.freeze([...(tasksByItemId.get(item.id) ?? [])]),
     });
     items.push(link);
-    if (presentation === "field-device" && occurrences.length === 0) {
+    if (policy.requiresSituationPlacement && occurrences.length === 0) {
       issues.push(dossierIssue("warning", "MISSING_SITUATION_PLACEMENT", item.id,
         `${item.label} staat nog niet op het situatieschema.`));
     }
-    if (presentation === "panel-device" && !link.hasBoardPlacement) {
+    if (policy.requiresBoardPlacement && !link.hasBoardPlacement) {
       issues.push(dossierIssue("warning", "MISSING_BOARD_PLACEMENT", item.id,
         `${item.label} staat nog niet in de bordindeling.`));
     }
@@ -103,7 +92,13 @@ export function createDossierSnapshot(
     ["installationAddress", "adres van de installatie"], ["nominalVoltage", "nominale spanning"],
     ["revisionLabel", "documentversie"], ["issueDate", "uitgiftedatum"],
   ] as const) {
-    if (!metadata[key]) issues.push(dossierIssue("warning", "MISSING_DOSSIER_METADATA", -1, `Dossiergegeven ontbreekt: ${label}.`));
+    if (!metadata[key]) issues.push(dossierIssue(
+      "warning",
+      "MISSING_DOSSIER_METADATA",
+      undefined,
+      `Dossiergegeven ontbreekt: ${label}.`,
+      key,
+    ));
   }
 
   for (const [itemId, occurrenceIds] of byItemId) {
@@ -134,8 +129,15 @@ function findCircuitId(itemId: number, itemById: ReadonlyMap<number, { parentId:
 function dossierIssue(
   severity: DossierIssue["severity"],
   code: DossierIssue["code"],
-  itemId: number,
+  itemId: number | undefined,
   message: string,
+  discriminator?: string,
 ): DossierIssue {
-  return Object.freeze({ id: `${code}:${itemId}`, severity, code, itemId, message });
+  return Object.freeze({
+    id: `${code}:${discriminator ?? itemId ?? "document"}`,
+    severity,
+    code,
+    itemId,
+    message,
+  });
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ui } from "../uiStyles";
+import { GroupedItemTypeOptions } from "./GroupedItemTypeOptions";
 
 interface AddItemControlProps {
   readonly allowedTypes: readonly string[];
@@ -14,8 +15,8 @@ export function AddItemControl({ allowedTypes, label, onAdd }: AddItemControlPro
   if (allowedTypes.length === 0) return null;
 
   return (
-    <div className="mt-1 mb-2 ml-5 flex flex-wrap items-center gap-1">
-      <label>
+    <div className="mt-1 mb-2 ml-9 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md bg-neutral-100 p-1.5">
+      <label className="min-w-0">
         <span className="sr-only">{label}</span>
         <select
           className={ui.field}
@@ -23,7 +24,7 @@ export function AddItemControl({ allowedTypes, label, onAdd }: AddItemControlPro
           value={currentType}
           onChange={(event) => setSelectedType(event.currentTarget.value)}
         >
-          {allowedTypes.map((type) => <option key={type}>{type}</option>)}
+          <GroupedItemTypeOptions types={allowedTypes} />
         </select>
       </label>
       <button className={ui.button} type="button" onClick={() => onAdd(currentType)} disabled={currentType === ""}>

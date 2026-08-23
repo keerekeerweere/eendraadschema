@@ -19,6 +19,7 @@ import { useSchemaSnapshot } from "../useSchemaSnapshot";
 import { useSituationPlanSnapshot } from "../useSituationPlanSnapshot";
 import { useWorkspaceSnapshot } from "../useWorkspaceSnapshot";
 import { CustomSituationSymbolDialog } from "./CustomSituationSymbolDialog";
+import type { WorkspaceHistoryAdapter } from "../../application/WorkspaceHistoryAdapter";
 
 interface WorkspaceCommandBarProps {
   readonly schemaStore: SchemaStore;
@@ -27,9 +28,7 @@ interface WorkspaceCommandBarProps {
   readonly workspaceStore: WorkspaceStore;
   readonly saveStatusStore: SaveStatusStore;
   readonly situationHistoryStore: HistoryStatusStore;
-  readonly onSituationMutation: (historyKey?: string) => void;
-  readonly onSituationUndo: () => void;
-  readonly onSituationRedo: () => void;
+  readonly historyAdapter: WorkspaceHistoryAdapter;
   readonly onSave: () => void;
   readonly onOpenFile: () => void;
   readonly situationAssetService: SituationPlanAssetService;
@@ -50,9 +49,7 @@ export function WorkspaceCommandBar({
   workspaceStore,
   saveStatusStore,
   situationHistoryStore,
-  onSituationMutation,
-  onSituationUndo,
-  onSituationRedo,
+  historyAdapter,
   onSave,
   onOpenFile,
   situationAssetService,
@@ -89,37 +86,21 @@ export function WorkspaceCommandBar({
   const hasSituationSelection = workspace.selectedSituationElementIds.length > 0;
 
   function undo() {
-    if (inSituation) onSituationUndo();
-    else {
-      schemaStore.commands.undo();
-      reconcileEditorSelection();
-    }
+    historyAdapter.undo(inSituation ? "situation" : "schema");
   }
 
   function redo() {
-    if (inSituation) onSituationRedo();
-    else {
-      schemaStore.commands.redo();
-      reconcileEditorSelection();
-    }
-  }
-
-  function reconcileEditorSelection() {
-    editorStore.commands.reconcileItemIds(new Set(
-      schemaStore.getSnapshot().document.getAllItems().map(item => item.id),
-    ));
+    historyAdapter.redo(inSituation ? "situation" : "schema");
   }
 
   function selectPage(page: number) {
     if (page === situation.activePage) return;
     situationPlanStore.commands.selectPage(page);
     workspaceStore.commands.selectSituationElement(null);
-    onSituationMutation("changePage");
   }
 
   function addPage() {
     situationPlanStore.commands.addPage();
-    onSituationMutation();
   }
 
   function deletePage() {
@@ -129,7 +110,6 @@ export function WorkspaceCommandBar({
     ) return;
     situationPlanStore.commands.deletePage(situation.activePage);
     workspaceStore.commands.selectSituationElement(null);
-    onSituationMutation();
   }
 
   async function importBackground(event: ChangeEvent<HTMLInputElement>) {
@@ -176,8 +156,8 @@ export function WorkspaceCommandBar({
   const separatorClass = "mx-1 h-9 w-px self-center bg-neutral-300";
 
   return (
-    <div className="flex h-full w-full items-stretch justify-between border-b border-neutral-300 bg-neutral-50 px-2" role="toolbar" aria-label="Werkruimtecommando's">
-      <div className="flex items-stretch">
+    <div className="flex h-full min-w-max items-stretch justify-between border-b border-neutral-300 bg-neutral-50 px-2" role="toolbar" aria-label="Werkruimtecommando's">
+      <div className="flex items-stretch whitespace-nowrap">
         <button type="button" className={buttonClass} disabled={!canUndo} onClick={undo}>
           <span className="text-xl leading-none" aria-hidden="true">↶</span>
           Ongedaan
