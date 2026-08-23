@@ -155,3 +155,26 @@ Earlier React/property-editor commits immediately precede these in branch histor
 - Do not let deleting an ancestor silently remove a feeder circuit or board root.
 - Do not use pixel-perfect SVG snapshots where structural labels, relationships and element counts are sufficient.
 - Do not claim browser validation succeeded when only jsdom/RTL tests ran.
+
+## MCP-driven document edits (agent/`propose_change_set` sessions)
+
+Learned while importing a real installation through the MCP bridge; relevant to any session driving the live
+document via `propose_change_set`/`add_distribution_board` rather than editing source:
+
+- A `Kring` nested directly under another `Kring` renders as a **continuation of the same line (series)**, not
+  a parallel branch — this is correct for genuinely sequential devices (e.g. a main breaker feeding a
+  differential feeding a sub-board), but wrong for anything meant to read as parallel circuits sharing one
+  upstream device. For parallel siblings behind a shared point, nest a `Splitsing` in between (only
+  `Aansluiting`, `Bord`, `Splitsing` fan out children in parallel); `Zekering/differentieel` cannot hold `Kring`
+  children at all (not in its `allowedChilds`), so a shared RCD covering several parallel circuits has to be
+  represented as a `Kring` configured with differential properties, feeding a `Splitsing`, not as a
+  `Zekering/differentieel` node.
+- Setting a `Kring`'s `naam` via `update-item` is not enough for it to stick — the app's auto-numbering
+  (`Hierarchical_List.vindVolgendeKringNaam`) silently overwrites `naam` on every structural change unless
+  `autoKringNaam` is also set to `"manueel"` in the same update.
+- A secondary board can only be created with `addDistributionBoard` (exposed over MCP as
+  `add_distribution_board`); a plain `add-item` of type `Bord` produces an unregistered item that won't appear
+  in `schema.document.getBoards()` and won't accept a feeder relationship.
+- `propose_change_set`/`add_distribution_board` responses can time out on the adapter side (stdio or HTTP) while
+  the user is still deciding on the in-browser approval dialog — the change may still land. After any apparent
+  timeout, re-check state (`get_dossier_summary`/`get_item`) before assuming the proposal failed or retrying it.

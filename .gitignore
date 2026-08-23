@@ -3,3 +3,4 @@ dist/
 coverage/
 test-results/
 playwright-report/
+PDF_SCHEMA_IMPORT.md

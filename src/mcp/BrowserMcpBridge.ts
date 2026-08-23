@@ -1,4 +1,4 @@
-import type { AgentGraphOperation, SchemaStore } from "../application/SchemaStore";
+import type { AddDistributionBoardProperties, AgentGraphOperation, SchemaStore } from "../application/SchemaStore";
 import type { SituationPlanStore } from "../application/SituationPlanStore";
 import { createDossierSnapshot } from "../application/DossierReader";
 
@@ -94,6 +94,18 @@ export class BrowserMcpBridge {
         this.schemaStore.commands.applyAgentChangeSet(operations);
         return { approved: true, summary, revision: this.schemaStore.getSnapshot().revision };
       }
+      case "add_distribution_board": {
+        const baseRevision = getNumberParam(request.params, "baseRevision");
+        if (baseRevision !== schema.revision) throw new Error("Het dossier is gewijzigd; lees het opnieuw en maak een nieuw voorstel.");
+        const feederCircuitId = getNumberParam(request.params, "feederCircuitId");
+        const properties = getBoardProperties(request.params);
+        const summary = `Voorstel van assistent: nieuw verdeelbord '${properties.name}' toevoegen, gevoed door kring ${feederCircuitId}.`;
+        if (!await requestProposalApproval(summary)) {
+          return { approved: false, summary };
+        }
+        const boardId = this.schemaStore.commands.addDistributionBoard(feederCircuitId, properties);
+        return { approved: true, summary, boardId, revision: this.schemaStore.getSnapshot().revision };
+      }
       default:
         throw new Error(`MCP-methode '${request.method}' wordt niet ondersteund.`);
     }
@@ -136,6 +148,27 @@ function getOperations(value: unknown): readonly AgentGraphOperation[] {
     }
   }
   return operations as AgentGraphOperation[];
+}
+function getOptionalTextParam(value: unknown, key: string): string | undefined {
+  const result = getRecord(value)[key];
+  if (result === undefined) return undefined;
+  if (typeof result !== "string") throw new Error(`'${key}' moet tekst zijn.`);
+  return result;
+}
+function getBoardProperties(value: unknown): AddDistributionBoardProperties {
+  const record = getRecord(value);
+  const properties = record.properties;
+  if (typeof properties !== "object" || properties === null || Array.isArray(properties)) {
+    throw new Error("'properties' moet een object zijn.");
+  }
+  const name = getTextParam({ name: (properties as Record<string, unknown>).name }, "name");
+  const location = getOptionalTextParam(properties, "location");
+  const cableType = getOptionalTextParam(properties, "cableType");
+  const conductorSection = getOptionalTextParam(properties, "conductorSection");
+  const lengthMetersRaw = (properties as Record<string, unknown>).lengthMeters;
+  if (lengthMetersRaw !== undefined && typeof lengthMetersRaw !== "number") throw new Error("'lengthMeters' moet een getal zijn.");
+  const lengthMeters = lengthMetersRaw as number | undefined;
+  return { name, location, cableType, conductorSection, lengthMeters };
 }
 function describeProposal(operations: readonly AgentGraphOperation[], description: string): string {
   const names = operations.map(operation => operation.kind).join(", ");

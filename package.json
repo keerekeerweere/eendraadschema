@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "typecheck:test": "tsc -p tsconfig.test.json",
     "mcp:serve": "node scripts/eds-mcp.mjs serve",
-    "mcp:stdio": "node scripts/eds-mcp.mjs stdio"
+    "mcp:stdio": "node scripts/eds-mcp.mjs stdio",
+    "mcp:http": "node scripts/eds-mcp.mjs http"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
