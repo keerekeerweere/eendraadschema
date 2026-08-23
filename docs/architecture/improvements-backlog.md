@@ -208,7 +208,18 @@ from that work). Grouped the way it was originally requested: essential / nice-t
       ChatGPT via OAuth, and local inference via Ollama/llama.cpp) — meaning a real provider-config
       surface in the app (endpoint/key entry, OAuth flow, local-model selection), not just a hardcoded
       single API call. Local-model support matters here specifically because this tool handles real
-      client installation data; not everyone will want that leaving the machine.
+      client installation data; not everyone will want that leaving the machine. **This layer is
+      already spec'd in much more depth**:
+      [`byo-llm-provider-rag-webmcp-idea.md`](./byo-llm-provider-rag-webmcp-idea.md) — a pre-existing
+      architecture seed in this same directory covering exactly this (provider abstraction, an
+      OpenAI-compatible provider type that covers Ollama/llama.cpp/local endpoints, secrets/SSRF/
+      egress-policy requirements, and a "WebMCP" concept for the *other* direction — an external
+      agent calling into the product — which is conceptually the same role
+      `BrowserMcpBridge.ts`/`scripts/eds-mcp.mjs` already plays in this codebase today, just via a
+      custom WebSocket bridge instead of the proposed browser-native WebMCP API). The AREI verifier
+      would be a *consumer* of that provider-gateway layer, not a reason to build a second one. That
+      doc's new §33 grounds the generic template in this exact use case — concept-by-concept mapping,
+      a narrowed PoC scope, and the one open question (tenancy) that only matters if item 18 happens.
     - **The hard domain problem, in your own words**: compliance can't be checked against a single
       "current AREI edition" for the whole document, because different parts of a real installation
       were legitimately approved under whichever AREI edition was in force *when that part was last
@@ -225,7 +236,11 @@ from that work). Grouped the way it was originally requested: essential / nice-t
 18. **Broader platform rework**, sketched during a frustrated aside mid-import: a Python backend with
     a proper container setup, a modern single-page frontend, a clearer menu structure, and first-class
     import/export. (Resizable/collapsible panels are already implemented — see the correction above —
-    so this is purely backend + frontend-framework + menu/import-export scope now.) Substantially
-    bigger scope than items 1–17 above, and you explicitly said to hold off until the live import was
-    done. Now's presumably the moment to turn this into a real plan, if you want to go there — happy
-    to draft one, but it deserves its own dedicated planning pass rather than a bullet here.
+    so this is purely backend + frontend-framework + menu/import-export scope now.) If the Python
+    backend happens, [`byo-llm-provider-rag-webmcp-idea.md`](./byo-llm-provider-rag-webmcp-idea.md)'s
+    suggested stack (section 22: FastAPI, SQLAlchemy, PostgreSQL+pgvector) is a reasonable starting
+    point to evaluate against, since item 17 would need to live somewhere in that same backend anyway.
+    Substantially bigger scope than items 1–17 above, and you explicitly said to hold off until the
+    live import was done. Now's presumably the moment to turn this into a real plan, if you want to go
+    there — happy to draft one, but it deserves its own dedicated planning pass rather than a bullet
+    here.
