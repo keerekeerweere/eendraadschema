@@ -23,17 +23,6 @@ export class Leiding extends Electro_Item {
         if (this.props.kabel_locatie == "Luchtleiding") this.props.kabel_is_in_buis = false; //Indien luchtleiding nooit een buis tekenen
     }
 
-    toHTML(mode: string) {
-        let output = this.toHTMLHeader(mode);
-
-        output += "&nbsp;" + this.nrToHtml()
-               +  "Type: " + this.stringPropToHTML('type_kabel',10)
-               +  ", Plaatsing: " + this.selectPropToHTML('kabel_locatie',["N/A","Ondergronds","Luchtleiding","In wand","Op wand"]);
-        
-        if (this.props.kabel_locatie != "Luchtleiding") output += ", In buis: " + this.checkboxPropToHTML('kabel_is_in_buis');
-
-        return(output);
-    }
 
     toSVG() {
         this.overrideKeys();

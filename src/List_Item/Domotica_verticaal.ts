@@ -25,14 +25,6 @@ export class Domotica_verticaal extends Electro_Item {
         return 256;
     }
 
-    toHTML(mode: string) {
-        let output = this.toHTMLHeader(mode);
-
-        output += "&nbsp;" + this.nrToHtml()
-               +  "Tekst: " + this.stringPropToHTML('tekst',10);
-
-        return(output);
-    }
 
     toSVG() {
         let mySVG:SVGelement = new SVGelement();

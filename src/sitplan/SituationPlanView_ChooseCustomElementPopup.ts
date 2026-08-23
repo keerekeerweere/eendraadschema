@@ -1,5 +1,6 @@
 import { formatFloat } from "../general"
 import { EventManager } from "../EventManager";
+import { legacyUi } from "../ui/legacyStyles";
 
 /**
  * Popup functionaliteit voor het kiezen van aangepaste elementtypes in de situatieplan weergave
@@ -52,8 +53,8 @@ export class SituationPlanView_ChooseCustomElementPopup {
         const div = document.createElement('div');
         
         div.innerHTML = `
-            <div id="popupOverlay" class="popup-overlay">
-                <div id="popupWindow" class="popup">
+            <div id="popupOverlay" class="${legacyUi.popupOverlay}">
+                <div id="popupWindow" class="${legacyUi.popup}">
                     <h3>Los symbool (niet in ééndraadschema)</h3>
                     <div style="position: absolute; top: 5px; right: 5px; display: flex; align-items: center; justify-content: center;">
                         <button id="closeButton" style="background-color: #e00; border-radius: 4px; width: 20px; height: 20px; font-size: 16px; color: white; border: none; outline: none; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0px; vertical-align: middle;">&#10006;</button>
@@ -84,8 +85,8 @@ export class SituationPlanView_ChooseCustomElementPopup {
                         <label for="setDefaultCheckbox" style="margin-left: 10px; flex-grow: 1; flex-wrap: wrap;">Zet schaal als standaard voor alle toekomstige nieuwe symbolen.</label>
                     </div>
                     <div style="display: flex; justify-content: center; gap: 0px;">
-                        <button id="okButton" class="rounded-button">OK</button>
-                        <button id="cancelButton" class="rounded-button">Cancel</button>
+                        <button id="okButton" class="${legacyUi.dialogButton}">OK</button>
+                        <button id="cancelButton" class="${legacyUi.dialogButton}">Cancel</button>
                     </div>
                 </div>
             </div>`;
@@ -101,7 +102,7 @@ export class SituationPlanView_ChooseCustomElementPopup {
             const cancelButton = div.querySelector('#cancelButton') as HTMLButtonElement;
 
         // Zet standaard schaal en rotatie
-        scaleInput.value = formatFloat(globalThis.structure.sitplan.defaults.scale*100,6);
+        scaleInput.value = formatFloat(globalThis.structure.sitplan.getDefaults().scale*100,6);
         rotationInput.value = formatFloat(0);
 
         /*
@@ -125,11 +126,11 @@ export class SituationPlanView_ChooseCustomElementPopup {
             function isNumeric(value: any) {
                 return /^-?\d+(\.\d+)?$/.test(value);
             }
-            if (!(isNumeric(scaleInput.value)) || (Number(scaleInput.value) <= 0)) scaleInput.value = String(globalThis.structure.sitplan.defaults.scale*100);
+            if (!(isNumeric(scaleInput.value)) || (Number(scaleInput.value) <= 0)) scaleInput.value = String(globalThis.structure.sitplan.getDefaults().scale*100);
             if (!(isNumeric(rotationInput.value))) rotationInput.value = String(0);
             
             if (setDefaultCheckbox.checked) {
-                globalThis.structure.sitplan.defaults.scale = Number(scaleInput.value)/100;
+                globalThis.situationPlanStore.commands.updateDefaults({ scale: Number(scaleInput.value)/100 });
             }
             const selectedType = itemTypeSelect.value;
             closePopup();

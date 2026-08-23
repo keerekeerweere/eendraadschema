@@ -233,6 +233,14 @@ function flattenSVG(SVGstruct,shiftx,shifty,node,overflowright=0) {
     for (var i = 0; i < SVGstruct.children.length; i++) {
       str = str.concat(flattenSVG(SVGstruct.children[i],shiftx,shifty,node+1),"\n");
     }
+    const schemaItemId = outstruct.attributes.getNamedItem("data-schema-item-id")?.nodeValue;
+    if (node > 0 && schemaItemId !== undefined) {
+      const anchorY = parseFloat(outstruct.attributes.getNamedItem("data-schema-anchor-y")?.nodeValue ?? "0");
+      const endX = parseFloat(outstruct.attributes.getNamedItem("data-schema-end-x")?.nodeValue ?? "0");
+      const width = parseFloat(outstruct.attributes.getNamedItem("data-schema-width")?.nodeValue ?? "0");
+      const height = parseFloat(outstruct.attributes.getNamedItem("data-schema-height")?.nodeValue ?? "0");
+      str = `<g data-schema-item-id="${schemaItemId}" data-schema-x="${shiftx}" data-schema-y="${shifty}" data-schema-width="${width}" data-schema-height="${height}" data-schema-anchor-x="${shiftx}" data-schema-anchor-y="${shifty + anchorY}" data-schema-end-x="${shiftx + endX}">${str}</g>`;
+    }
     if (node <= 0) {
       if (outstruct.attributes.getNamedItem("width")) { // make SVG a 0,0 element
         str = '<svg id="EDSSVG" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" transform="scale(1,1)" width="' + (parseInt(outstruct.attributes.getNamedItem("width").nodeValue)+overflowright)  +

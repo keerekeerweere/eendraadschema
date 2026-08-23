@@ -1,4 +1,5 @@
     import { SituationPlanElement } from "./SituationPlanElement";
+    import { legacyUi } from "../ui/legacyStyles";
     
     /** 
      * Een serie functies om een formulier te tonen met edit-functionaliteiten voor symbolen in het situatieplan
@@ -78,8 +79,8 @@ export function SituationPlanView_MultiElementPropertiesPopup(sitplanElements: S
     const div = document.createElement('div');
 
     div.innerHTML = `
-        <div id="popupOverlay" class="popup-overlay">
-            <div id="popupWindow" class="popup">
+        <div id="popupOverlay" class="${legacyUi.popupOverlay}">
+            <div id="popupWindow" class="${legacyUi.popup}">
                 <h3>Meerdere elementen bewerken</h3>
                 <div id="fontSizeContainer" style="display: flex; margin-bottom: 30px; align-items: center;">
                     <label for="fontSizeInput" style="margin-right: 10px; display: inline-block; white-space: nowrap;">Tekengrootte (px):</label>
@@ -98,8 +99,8 @@ export function SituationPlanView_MultiElementPropertiesPopup(sitplanElements: S
                     <label for="setDefaultCheckbox" style="margin-left: 10px; flex-grow: 1; flex-wrap: wrap;">Zet tekengrootte en schaal als standaard voor alle toekomstige nieuwe symbolen.</label>
                 </div>
                 <div style="display: flex; justify-content: center; gap: 0px;">
-                    <button id="okButton" class="rounded-button">OK</button>
-                    <button id="cancelButton" class="rounded-button">Annuleren</button>
+                    <button id="okButton" class="${legacyUi.dialogButton}">OK</button>
+                    <button id="cancelButton" class="${legacyUi.dialogButton}">Annuleren</button>
                 </div>
             </div>
         </div>`;
@@ -166,8 +167,8 @@ export function SituationPlanView_MultiElementPropertiesPopup(sitplanElements: S
         if (isNumeric(rotationInput.value)) rotation = Number(rotationInput.value);
         
         if (setDefaultCheckbox.checked) {
-            if (fontSize != null) globalThis.structure.sitplan.defaults.fontsize = Number(fontSizeInput.value);
-            if (scale != null) globalThis.structure.sitplan.defaults.scale = Number(scaleInput.value)/100;
+            if (fontSize != null) globalThis.situationPlanStore.commands.updateDefaults({ fontsize: Number(fontSizeInput.value) });
+            if (scale != null) globalThis.situationPlanStore.commands.updateDefaults({ scale: Number(scaleInput.value)/100 });
         }
 
         closePopup(); // We close the popup first to avoid that an error somewhere leaves it open

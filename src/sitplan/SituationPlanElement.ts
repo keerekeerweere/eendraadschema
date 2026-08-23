@@ -325,7 +325,7 @@ export class SituationPlanElement {
 
         } else { // Indien we de SVG willen gebruiken in een innerHTML van een div element en dit element dan zelf positioneren en roteren
 
-            return `<svg class="svg-icon" width="${this.sizex*this.scale}px" height="${this.sizey*this.scale}px" viewBox="0 0 ${this.sizex} ${this.sizey}">${this.svg}</svg>`;           
+            return `<svg class="pointer-events-none absolute left-1/2 top-1/2 -translate-1/2" width="${this.sizex*this.scale}px" height="${this.sizey*this.scale}px" viewBox="0 0 ${this.sizex} ${this.sizey}">${this.svg}</svg>`;
         }
     }
 

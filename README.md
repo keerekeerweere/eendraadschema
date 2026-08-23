@@ -25,6 +25,11 @@ The "`index.html`"-file will still need all the resources in the root folder so 
 copied into the root-folder to get a working application.
 The default build configuration is only provided as an example.
 
+## Local MCP assistant bridge
+
+An external MCP client can inspect the live electrical graph and submit a reviewed change proposal.
+This is deliberately local-only: start `npm run mcp:serve`, open the app with `?mcp=on`, then configure the MCP client to run `npm run mcp:stdio` in this repository. The browser asks for approval before applying a proposal; accepted proposals are one undoable document change.
+
 ## License
 
 See LICENSE.md

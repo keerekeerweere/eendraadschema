@@ -1,5 +1,6 @@
 import { Hierarchical_List } from "../Hierarchical_List";
 import { IndexedDBStorage } from "../storage/IndexedDBStorage";
+import { wrapCurrentEdsPayload } from "../legacy/persistence/EdsCodec";
 
 /**
  * Klasse voor het automatisch en regelmatig opslaan van het huidige schema in IndexedDB
@@ -165,11 +166,11 @@ export class AutoSaver {
         if (this.suspendSaving) return;
 
         // Als het schema gewijzigd is wordt dit opgeslagen in IndexedDB
-        const text = "TXT0040000" + this.getStructure().toJsonObject(true);
+        const text = wrapCurrentEdsPayload("TXT", this.getStructure().toJsonObject(true));
         if (text != this.lastSavedString) {
             (async () => {
                 try {
-                    await this.saveToIndexedDB("TXT0040000" + this.getStructure().toJsonObject(true), true); // parameter true geeft aan dat het over een autosave gaat
+                    await this.saveToIndexedDB(wrapCurrentEdsPayload("TXT", this.getStructure().toJsonObject(true)), true); // parameter true geeft aan dat het over een autosave gaat
                     this.lastSavedString = text;
                     this.lastSavedType = AutoSaver.SavedType.AUTOMATIC;
                     //console.log('Autosave uitgevoerd op ' + new Date().toLocaleString());
@@ -198,7 +199,7 @@ export class AutoSaver {
         // Het schema wordt altijd opgeslagen in IndexedDB
         (async () => {
             try {
-                if (text == null) text = "TXT0040000" + this.getStructure().toJsonObject(true);
+                if (text == null) text = wrapCurrentEdsPayload("TXT", this.getStructure().toJsonObject(true));
                 await this.saveToIndexedDB(text, false); // parameter false geeft aan dat het over een manual save gaat
                 this.lastSavedString = text;
                 this.lastSavedType = AutoSaver.SavedType.MANUAL;
@@ -297,4 +298,3 @@ export class AutoSaver {
     }
   
 }
-

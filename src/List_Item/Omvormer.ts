@@ -39,25 +39,6 @@ export class Omvormer extends Electro_Item {
         }
     }
 
-    toHTML(mode: string) {
-        this.overrideKeys();
-        let output = this.toHTMLHeader(mode);
-        let parent;
-
-        output += "&nbsp;" + this.nrToHtml();
-        if ( ((parent = this.getParent()) != null) && (parent.getType() == "Kring") )
-            output += "In kring: " + this.checkboxPropToHTML('inkring') + ", ";
-        
-        // Only show micro checkbox if there's one child or less
-        if (this.getNumChilds() <= 1) {
-            output += "Micro: " + this.checkboxPropToHTML('micro') + ", ";
-        }
-        
-        output += "Tekst: " + this.stringPropToHTML('tekst',10) + ", ";
-        output += "Adres/tekst: " + this.stringPropToHTML('adres',5);
-
-        return(output);
-    }
 
     toSVG(sitplan = false) {
         let mySVG:SVGelement = new SVGelement();

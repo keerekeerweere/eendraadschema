@@ -1,3 +1,5 @@
+import { legacyUi } from "../ui/legacyStyles";
+
 export class Dialog {
 
     private title: string;
@@ -20,11 +22,11 @@ export class Dialog {
         // Create the popup
         const popupOverlay = document.createElement('div');
         popupOverlay.id = 'popupOverlay';
-        popupOverlay.classList.add('popup-overlay');
+        popupOverlay.className = legacyUi.popupOverlay;
         
         const popup = document.createElement('div');
         popup.id = 'popup';
-        popup.classList.add('popup');
+        popup.className = legacyUi.popup;
     
         // Add the HTML content
         popup.innerHTML = `<h3>${this.title}</h3><p>${this.body}</p>`;
@@ -32,14 +34,12 @@ export class Dialog {
         // Add the buttons
     
         const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.justifyContent = 'center';
-        buttonContainer.style.gap = '0px';        
+        buttonContainer.className = 'flex justify-center';
 
         for (const button of this.buttons) {
             const buttonElement = document.createElement('button');
             buttonElement.textContent = button.text;
-            buttonElement.classList.add('rounded-button');
+            buttonElement.className = legacyUi.dialogButton;
             buttonElement.addEventListener('click', (() => {
                 document.body.removeChild(popupOverlay);
                 document.body.style.pointerEvents = 'auto';

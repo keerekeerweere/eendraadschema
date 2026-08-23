@@ -1,4 +1,5 @@
 import { MultiLevelStorage } from "../storage/MultiLevelStorage";
+import { legacyUi } from "../ui/legacyStyles";
 
 export class HelperTip {
     private storage: MultiLevelStorage<any>;
@@ -23,19 +24,18 @@ export class HelperTip {
         // Create the popup
         const popupOverlay = document.createElement('div');
         popupOverlay.id = 'popupOverlay';
-        popupOverlay.classList.add('popup-overlay');
+        popupOverlay.className = legacyUi.popupOverlay;
         
         const popup = document.createElement('div');
         popup.id = 'popup';
-        popup.classList.add('popup');
+        popup.className = legacyUi.popup;
     
         // Add the HTML content
         popup.innerHTML = htmlContent;
     
         // Create the "Never display again" checkbox
         const checkboxLabel = document.createElement('label');
-        checkboxLabel.style.display = 'block';
-        checkboxLabel.style.marginTop = '10px';
+        checkboxLabel.className = 'mt-2.5 block';
     
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
@@ -50,14 +50,12 @@ export class HelperTip {
         popup.appendChild(checkboxLabel);
 
         const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.justifyContent = 'center';
-        buttonContainer.style.gap = '0px';        
+        buttonContainer.className = 'flex justify-center';
     
         // Create the "OK" button
         const okButton = document.createElement('button');
         okButton.textContent = 'OK';
-        okButton.classList.add('rounded-button');
+        okButton.className = legacyUi.dialogButton;
     
         okButton.addEventListener('click', (event) => {
           //stop the event from propagating

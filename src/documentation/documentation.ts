@@ -1,4 +1,4 @@
-/* FUNCTION showFilePage
+/* FUNCTION showDocumentationPage
    
    Shows the Documentation-Page.
 

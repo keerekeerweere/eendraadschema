@@ -24,14 +24,6 @@ export class Meerdere_verbruikers extends Electro_Item {
         return 256;
     }
 
-    toHTML(mode: string) {
-        let output = this.toHTMLHeader(mode);
-
-        output += "&nbsp;" + this.nrToHtml()
-               +  "Adres/tekst: " + this.stringPropToHTML('adres',5);
-
-        return(output);
-    }
 
     toSVG() {
         let mySVG:SVGelement; // = new SVGelement();

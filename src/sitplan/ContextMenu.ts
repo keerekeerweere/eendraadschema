@@ -1,3 +1,5 @@
+import { legacyUi } from "../ui/legacyStyles";
+
 export class ContextMenu {
     private menuItems: { label: string, shortcut?: string, callback: () => void }[] = [];
     private menuElement: HTMLElement | null = null;
@@ -8,7 +10,7 @@ export class ContextMenu {
      */
     constructor(div: HTMLElement = document.body) {
         this.menuElement = document.createElement('div');
-        this.menuElement.className = 'context-menu';
+        this.menuElement.className = legacyUi.contextMenu;
         div.appendChild(this.menuElement);
     }
 
@@ -48,18 +50,18 @@ export class ContextMenu {
             this.menuItems.forEach((item, index) => {
                 if (item.label === 'separator') {
                     const separator = document.createElement('hr');
-                    separator.className = 'context-menu-separator';
+                    separator.className = legacyUi.contextMenuSeparator;
                     this.menuElement.appendChild(separator);
                 } else {
                     const menuItem = document.createElement('div');
-                    menuItem.className = 'context-menu-item';
+                    menuItem.className = legacyUi.contextMenuItem;
 
                     const labelElement = document.createElement('span');
                     labelElement.textContent = item.label;
 
                     const shortcutElement = document.createElement('span');
                     shortcutElement.textContent = item.shortcut || '';
-                    shortcutElement.className = 'context-menu-shortcut';
+                    shortcutElement.className = legacyUi.contextMenuShortcut;
 
                     menuItem.appendChild(labelElement);
                     menuItem.appendChild(shortcutElement);

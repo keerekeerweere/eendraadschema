@@ -14,6 +14,8 @@ import { Dialog } from "../documentation/Dialog";
 import { SituationPlanView_ElementPropertiesPopup } from "./SituationPlanView_ElementPropertiesPopup";
 import { SituationPlanView_MultiElementPropertiesPopup } from "./SituationPlanView_MultiElementPropertiesPopup";
 import { AskLegacySchakelaar } from "../importExport/AskLegacySchakelaar";
+import type { LegacySituationPlanStore } from "../application/LegacySituationPlanStore";
+import { legacyUi } from "../ui/legacyStyles";
 
 enum MovableType { Movable, NotMovable, Mixed, Undefined };
 
@@ -46,16 +48,18 @@ export class SituationPlanView {
 
     private mousedrag: MouseDrag; /** behandelt het verslepen van een box */
 
-    private sitplan;
+    private sitplan: SituationPlan;
+    private sitplanStore: LegacySituationPlanStore;
 
     private event_manager;
 
-    constructor(canvas: HTMLElement, paper: HTMLElement, sitplan: SituationPlan) {
+    constructor(canvas: HTMLElement, paper: HTMLElement, sitplanStore: LegacySituationPlanStore) {
         this.canvas = canvas;
         this.paper = paper;
         this.contextMenu = new ContextMenu();
 
-        this.sitplan = sitplan;
+        this.sitplanStore = sitplanStore;
+        this.sitplan = sitplanStore.getLegacyDocument().sitplan;
         this.paper.style.transformOrigin = 'top left'; // Keep the origin point consistent when scaling
 
         this.mousedrag = new MouseDrag();
@@ -151,7 +155,7 @@ export class SituationPlanView {
         //Verwijder de event manager
         this.event_manager.dispose();
         //Ga over all situationplanelements and verwijder de bijhorende boxes uit the DOM
-        for (let element of this.sitplan.elements) {
+        for (let element of this.sitplan.getElements()) {
             if (element.boxref != null) element.boxref.remove();
             if (element.boxlabelref != null) element.boxlabelref.remove();
         }
@@ -301,7 +305,7 @@ export class SituationPlanView {
      */
     private changePageSelectedBoxes() {
         if (this.selected.length() > 0) {
-            const pages = Array.from({ length: this.sitplan.numPages }, (_, i) => String(i + 1)).filter(page => page !== String(this.sitplan.activePage));
+            const pages = Array.from({ length: this.sitplan.getPageCount() }, (_, i) => String(i + 1)).filter(page => page !== String(this.sitplan.getActivePage()));
             let selectedBoxes = this.selected.getAllSelected().filter(e => e != null);
             let selectedMovableBoxes = selectedBoxes.filter(e => (e as any).sitPlanElementRef != null && (e as any).sitPlanElementRef.movable);
             let selectedSitPlanElements = selectedBoxes.map(e => (e as any).sitPlanElementRef).filter(e => e != null);
@@ -365,7 +369,7 @@ export class SituationPlanView {
                 globalThis.undostruct.store();
             }, 'Del');
 
-            if ((this.sitplan.numPages > 1) && (sitPlanElement.movable)) {
+            if ((this.sitplan.getPageCount() > 1) && (sitPlanElement.movable)) {
                 this.contextMenu.addLine();
                 this.contextMenu.addMenuItem('Naar pagina..', this.changePageSelectedBoxes.bind(this), 'PgUp/PgDn');
             }
@@ -392,13 +396,21 @@ export class SituationPlanView {
         // Box aanmaken op de DOM voor het symbool of in te laden externe figuur
         // extra property sitPlanElementRef toegevoegd aan DOM zodat we later ons situatieplan element kunnen terugvinden
         let box = document.createElement('div');
-        Object.assign(box, { id: element.id, className: "box", sitPlanElementRef: element });
+        Object.assign(box, {
+            id: element.id,
+            className: `${legacyUi.situationBox}${element.movable ? '' : ' cursor-default'}`,
+            sitPlanElementRef: element,
+        });
         box.setAttribute('movable', (element.movable ? 'true' : 'false'));
         element.boxref = box;
 
         // Boxlabel aanmaken op de DOM voor de tekst bij het symbool
         let boxlabel = document.createElement('div');
-        Object.assign(boxlabel, { id: element.id + '_label', className: "boxlabel", sitPlanElementRef: element });
+        Object.assign(boxlabel, {
+            id: element.id + '_label',
+            className: `${legacyUi.situationLabel}${element.movable ? '' : ' cursor-default'}`,
+            sitPlanElementRef: element,
+        });
         boxlabel.setAttribute('movable', (element.movable ? 'true' : 'false'));
         boxlabel.innerHTML = htmlspecialchars(element.getAdres()); // is deze nodig? Wellicht reeds onderdeel van updateContent
         element.boxlabelref = boxlabel;
@@ -507,7 +519,7 @@ export class SituationPlanView {
         }
         if (boxlabel.style.top != top) boxlabel.style.top = top; // Vermijd aanpassingen DOM indien niet nodig
 
-        if (this.sitplan.activePage == sitPlanElement.page) {
+        if (this.sitplan.getActivePage() == sitPlanElement.page) {
             if (boxlabel.classList.contains('hidden')) boxlabel.classList.remove('hidden'); // Vermijd aanpassingen DOM indien niet nodig
         } else {
             if (!boxlabel.classList.contains('hidden')) boxlabel.classList.add('hidden'); // Vermijd aanpassingen DOM indien niet nodig
@@ -555,7 +567,7 @@ export class SituationPlanView {
         const transform = getRotationTransform(sitPlanElement);
         if (div.style.transform != transform) div.style.transform = transform; // Vermijd aanpassingen DOM indien niet nodig
 
-        if (this.sitplan.activePage == sitPlanElement.page) {
+        if (this.sitplan.getActivePage() == sitPlanElement.page) {
             if (div.classList.contains('hidden')) div.classList.remove('hidden'); // Vermijd aanpassingen DOM indien niet nodig
         } else {
             if (!div.classList.contains('hidden')) div.classList.add('hidden'); // Vermijd aanpassingen DOM indien niet nodig
@@ -595,14 +607,14 @@ export class SituationPlanView {
         const fragment: DocumentFragment = document.createDocumentFragment();
 
         let appendNeeded = false;
-        for (let element of this.sitplan.elements) {
+        for (let element of this.sitplan.getElements()) {
             if (!element.boxref) { this.makeBox(element, fragment); appendNeeded = true; }
         }
         if (appendNeeded) this.paper.append(fragment); // We moeten de boxes toevoegen aan de DOM alvorens de label positie te berekenen aangezien we de size van de labels moeten kennen
 
-        this.showPage(this.sitplan.activePage);
-        for (let element of this.sitplan.elements) {
-            if (element.page == this.sitplan.activePage) {
+        this.showPage(this.sitplan.getActivePage());
+        for (let element of this.sitplan.getElements()) {
+            if (element.page == this.sitplan.getActivePage()) {
                 this.updateBoxContent(element);
                 this.updateSymbolAndLabelPosition(element);
             }
@@ -623,7 +635,7 @@ export class SituationPlanView {
     getLastSelectedBoxOrdinal(): number | null {
         if (this.selected.length() == 0) return null;
 
-        return this.sitplan.elements.findIndex(e => e.boxref == this.selected.getLastSelected());
+        return this.sitplan.getElements().findIndex(e => e.boxref == this.selected.getLastSelected());
     }
 
     /**
@@ -634,7 +646,8 @@ export class SituationPlanView {
     getSelectedBoxesOrdinals(): number[] {
         if (this.selected.length() == 0) return [];
 
-        return this.sitplan.elements.filter(e => this.selected.includes(e.boxref)).map(e => this.sitplan.elements.indexOf(e));
+        const elements = this.sitplan.getElements();
+        return elements.filter(e => this.selected.includes(e.boxref)).map(e => elements.indexOf(e));
     }
 
     /**
@@ -644,7 +657,7 @@ export class SituationPlanView {
      */
     public selectOneBox(box: HTMLElement | null) {
         if (!box) return;
-        box.classList.add('selected');
+        this.setBoxSelected(box, true);
         this.selected.selectOne(box);
         globalThis.undostruct.updateSelectedBoxes();
     }
@@ -656,7 +669,7 @@ export class SituationPlanView {
      */
     public selectBox(box: HTMLElement | null) {
         if (!box) return;
-        box.classList.add('selected');
+        this.setBoxSelected(box, true);
         this.selected.select(box);
         globalThis.undostruct.updateSelectedBoxes();
     }
@@ -670,7 +683,7 @@ export class SituationPlanView {
     public selectToggleBox(box: HTMLElement | null) {
         if (!box) return;
         this.selected.toggleButNeverRemoveLast(box);
-        if (this.selected.includes(box)) box.classList.add('selected'); else box.classList.remove('selected');
+        this.setBoxSelected(box, this.selected.includes(box));
         globalThis.undostruct.updateSelectedBoxes();
     }
 
@@ -679,8 +692,16 @@ export class SituationPlanView {
      */
     clearSelection() {
         let boxes = document.querySelectorAll('.box');
-        boxes.forEach(b => b.classList.remove('selected'));
+        boxes.forEach(box => this.setBoxSelected(box as HTMLElement, false));
         this.selected.clear();
+    }
+
+    private setBoxSelected(box: HTMLElement, selected: boolean) {
+        const canMove = box.getAttribute('movable') !== 'false';
+        box.classList.toggle('selected', selected);
+        box.classList.toggle('[border-width:calc(var(--selectPadding)*1px)]', selected);
+        box.classList.toggle('border-green-600', selected && canMove);
+        box.classList.toggle('border-red-600', selected && !canMove);
     }
 
     /**
@@ -713,7 +734,7 @@ export class SituationPlanView {
     sendToBack() {
         if (this.selected.length() == 0) return;
 
-        for (let element of this.sitplan.elements) {
+        for (let element of this.sitplan.getElements()) {
             if (element.boxref != null) {
                 let newzindex;
 
@@ -744,7 +765,7 @@ export class SituationPlanView {
         if (this.selected.length() == 0) return;
 
         let newzindex = 0;
-        for (let element of this.sitplan.elements) {
+        for (let element of this.sitplan.getElements()) {
             if ((element.boxref != null) && (!this.selected.includes(element.boxref))) {
                 newzindex = Math.max(newzindex, parseInt(element.boxref.style.zIndex) || 0);
             }
@@ -753,7 +774,7 @@ export class SituationPlanView {
 
         for (let selected of this.selected.getAllSelected()) {
             let element = (selected as any).sitPlanElementRef;
-            if (element == null) { this.sitplan.syncToSitPlan(); return; }
+            if (element == null) { this.sitplan.syncToEendraadSchema(); return; }
             if (element.movable == false) continue;
             selected.style.zIndex = newzindex.toString();
             if (element.boxlabelref != null) element.boxlabelref.style.zIndex = newzindex.toString();
@@ -964,8 +985,7 @@ export class SituationPlanView {
      * @param page - Het nummer van de pagina die getoond moet worden.
      */
     selectPage(page: number) {
-        this.sitplan.activePage = page;
-        this.redraw();
+        this.sitplanStore.commands.selectPage(page);
     }
 
     /**
@@ -975,7 +995,7 @@ export class SituationPlanView {
      */
     showPage(page: number) {
         this.clearSelection();
-        for (let element of this.sitplan.elements) {
+        for (let element of this.sitplan.getElements()) {
             if (element.page != page) {
                 element.boxref.classList.add('hidden');
                 element.boxlabelref.classList.add('hidden');
@@ -1124,7 +1144,7 @@ export class SituationPlanView {
                             {
                                 let oldPage = sitPlanElement.page;
                                 let newPage = (sitPlanElement.page + 1);
-                                if (newPage > this.sitplan.numPages) newPage = 1;
+                                if (newPage > this.sitplan.getPageCount()) newPage = 1;
 
                                 if (newPage == oldPage) return;
 
@@ -1141,7 +1161,7 @@ export class SituationPlanView {
                             {
                                 let oldPage = sitPlanElement.page;
                                 let newPage = (sitPlanElement.page - 1);
-                                if (newPage < 1) newPage = this.sitplan.numPages;
+                                if (newPage < 1) newPage = this.sitplan.getPageCount();
 
                                 if (newPage == oldPage) return;
 
@@ -1186,20 +1206,20 @@ export class SituationPlanView {
                 switch (event.key) {
                     case 'PageDown':
                         {
-                            let oldPage = this.sitplan.activePage;
+                            let oldPage = this.sitplan.getActivePage();
                             let newPage = (oldPage + 1);
-                            if (newPage > this.sitplan.numPages) newPage = 1;
+                            if (newPage > this.sitplan.getPageCount()) newPage = 1;
                             this.selectPage(newPage);
                             if (newPage != oldPage) globalThis.undostruct.store("changePage");
                         }
                         break;
                     case 'PageUp':
                         {
-                            let oldPage = this.sitplan.activePage;
+                            let oldPage = this.sitplan.getActivePage();
                             let newPage = (oldPage - 1);
-                            if (newPage < 1) newPage = this.sitplan.numPages;
+                            if (newPage < 1) newPage = this.sitplan.getPageCount();
                             this.selectPage(newPage);
-                            if (newPage != this.sitplan.activePage) globalThis.undostruct.store("changePage");
+                            if (newPage != oldPage) globalThis.undostruct.store("changePage");
                         }
                         break;
                 }
@@ -1275,15 +1295,15 @@ export class SituationPlanView {
     attachAddElementFromFileButton(elem: HTMLElement, fileinput: HTMLElement) {
         this.event_manager.addEventListener(elem, 'click', () => { this.contextMenu.hide(); fileinput.click(); });
         this.event_manager.addEventListener(fileinput, 'change', (event) => {
-            let element = this.sitplan.addElementFromFile(event, this.sitplan.activePage, this.paper.offsetWidth / 2, this.paper.offsetHeight / 2,
+            let element = this.sitplan.addElementFromFile(event, this.sitplan.getActivePage(), this.paper.offsetWidth / 2, this.paper.offsetHeight / 2,
                 (() => {
 
                     this.syncToSitPlan();
                     this.clearSelection();
                     element.needsViewUpdate = true; // for an external SVG this is needed, for an electroItem it is automatically set (see next function)
 
-                    const lastscale = element.scale;
-                    element.scaleSelectedBoxToPaperIfNeeded(this.paper.offsetWidth * 0.995, this.paper.offsetHeight * 0.995, this.sitplan.defaults.scale);
+                    const lastscale = element.getscale();
+                    element.scaleSelectedBoxToPaperIfNeeded(this.paper.offsetWidth * 0.995, this.paper.offsetHeight * 0.995, this.sitplan.getDefaults().scale);
 
                     this.redraw();
                     this.selectOneBox(element.boxref); // We moeten dit na redraw doen anders bestaat de box mogelijk nog niet
@@ -1313,7 +1333,7 @@ export class SituationPlanView {
                     this.bringToFront(); // Deze slaat ook automatisch undo informatie op dus we moeten geen globalThis.undostruct.store() meer doen.
                     // We voeren deze om dezelfde reden pas uit na het checken dat het bestand geldig is.
 
-                    if (element.scale != lastscale) {
+                    if (element.getscale() != lastscale) {
                         //Use the built in help top to display a text that the image was scaled
                         const helperTip = new HelperTip(globalThis.appDocStorage);
                         helperTip.show('sitplan.scaledImageToFit',
@@ -1357,7 +1377,7 @@ export class SituationPlanView {
         if (posy == null) posy = paperPos.y;
 
         if (id != null) {
-            let element = this.sitplan.addElementFromElectroItem(id, this.sitplan.activePage, posx, posy,
+            let element = this.sitplan.addElementFromElectroItem(id, this.sitplan.getActivePage(), posx, posy,
                 adrestype, adres, adreslocation, labelfontsize,
                 scale, rotate);
             if (element != null) {
@@ -1412,7 +1432,7 @@ export class SituationPlanView {
                 }*/
                 globalThis.structure.insertChildAfterId(electroItem, container.id);
 
-                let labelfontsize = globalThis.structure.sitplan.defaults.fontsize;
+                let labelfontsize = globalThis.structure.sitplan.getDefaults().fontsize;
                 this.addElectroItem(electroItem.id, 'manueel', '', 'rechts', labelfontsize, scale, rotate);
             });
         });
@@ -1492,22 +1512,6 @@ export class SituationPlanView {
 
 
     /**
-     * Verwijdert alle elementen van de pagina met het gegeven nummer.
-     * 
-     * @param page - Het nummer van de pagina die leeg gemaakt moet worden.
-     */
-    wipePage(page: number) {
-        let ElementsToWipe = this.sitplan.elements.filter((element) => element.page == page);
-
-        for (let element of ElementsToWipe) {
-            if (element == null) continue;
-            if (element.boxref != null) element.boxref.remove();
-            if (element.boxlabelref != null) element.boxlabelref.remove();
-            this.sitplan.removeElement(element);
-        }
-    }
-
-    /**
      * Maakt de knoppen in de ribbon aan om onder andere pagina's te selecteren, elementen te laden of verwijderen en pagina's te zoomen.
      * Deze functie wordt aangeroepen telkens er iets in de toestand verandert die mogelijk kan leiden tot aanpassingen in de ribbon.
      * 
@@ -1524,60 +1528,60 @@ export class SituationPlanView {
         // -- Undo/redo buttons --
 
         outputleft += `
-            <div class="icon" ${(globalThis.undostruct.undoStackSize() > 0 ? 'onclick="undoClicked()"' : 'style="filter: opacity(45%)"')}>
-                <img src="gif/undo.png" alt="Ongedaan maken" class="icon-image">
-                <span class="icon-text">Ongedaan maken</span>
+            <div class="${legacyUi.ribbonButton}" ${(globalThis.undostruct.undoStackSize() > 0 ? 'onclick="undoClicked()"' : 'style="filter: opacity(45%)"')}>
+                <img src="gif/undo.png" alt="Ongedaan maken" class="${legacyUi.ribbonIcon}">
+                <span class="${legacyUi.ribbonLabel}">Ongedaan maken</span>
             </div>
-            <div class="icon"  ${(globalThis.undostruct.redoStackSize() > 0 ? 'onclick="redoClicked()"' : 'style=\"filter: opacity(45%)\"')}>
-                <img src="gif/redo.png" alt="Opnieuw" class="icon-image">
-                <span class="icon-text">Opnieuw</span>
+            <div class="${legacyUi.ribbonButton}"  ${(globalThis.undostruct.redoStackSize() > 0 ? 'onclick="redoClicked()"' : 'style=\"filter: opacity(45%)\"')}>
+                <img src="gif/redo.png" alt="Opnieuw" class="${legacyUi.ribbonIcon}">
+                <span class="${legacyUi.ribbonLabel}">Opnieuw</span>
             </div>`
 
         // -- Visuals om items te laden of verwijderen --
 
         outputleft += `
             <span style="display: inline-block; width: 30px;"></span>
-            <div class="icon" id="button_Add">
-                <span class="icon-image" style="font-size:24px">➕</span>
-                <span class="icon-text">Uit bestand</span>
+            <div class="${legacyUi.ribbonButton}" id="button_Add">
+                <span class="${legacyUi.ribbonIcon}">➕</span>
+                <span class="${legacyUi.ribbonLabel}">Uit bestand</span>
             </div>
-            <div class="icon" id="button_Add_electroItem">
-                <span class="icon-image" style="font-size:24px">➕</span>
-                <span class="icon-text">Uit schema</span>
+            <div class="${legacyUi.ribbonButton}" id="button_Add_electroItem">
+                <span class="${legacyUi.ribbonIcon}">➕</span>
+                <span class="${legacyUi.ribbonLabel}">Uit schema</span>
             </div>`;
 
         outputleft += `
-            <div class="icon" id="button_Add_customItem">
-                <span class="icon-image" style="font-size:24px">➕</span>
-                <span class="icon-text">Los symbool</span>
+            <div class="${legacyUi.ribbonButton}" id="button_Add_customItem">
+                <span class="${legacyUi.ribbonIcon}">➕</span>
+                <span class="${legacyUi.ribbonLabel}">Los symbool</span>
             </div>`;
 
         outputleft += `
-            <div class="icon" id="button_Delete">
-                <span class="icon-image" style="font-size:24px">🗑</span>
-                <span class="icon-text">Verwijder</span>
+            <div class="${legacyUi.ribbonButton}" id="button_Delete">
+                <span class="${legacyUi.ribbonIcon}">🗑</span>
+                <span class="${legacyUi.ribbonLabel}">Verwijder</span>
             </div>`;
 
         // -- Visuals om items te bewerken --
 
         outputleft += `
             <span style="display: inline-block; width: 10px;"></span>
-            <div class="icon" id="button_edit">
-                <span class="icon-image" style="font-size:24px">&#x2699;</span>
-                <span class="icon-text">Bewerk</span>
+            <div class="${legacyUi.ribbonButton}" id="button_edit">
+                <span class="${legacyUi.ribbonIcon}">&#x2699;</span>
+                <span class="${legacyUi.ribbonLabel}">Bewerk</span>
             </div>`;
 
         // -- Visuals om naar achteren of voren te sturen --
 
         outputleft += `
             <span style="display: inline-block; width: 10px;"></span>
-            <div class="icon" id="sendBack">
-                <span class="icon-image" style="font-size:24px">⬇⬇</span>
-                <span class="icon-text">Naar achter</span>
+            <div class="${legacyUi.ribbonButton}" id="sendBack">
+                <span class="${legacyUi.ribbonIcon}">⬇⬇</span>
+                <span class="${legacyUi.ribbonLabel}">Naar achter</span>
             </div>
-            <div class="icon" id="bringFront">
-                <span class="icon-image" style="font-size:24px">⬆⬆</span>
-                <span class="icon-text">Naar voor</span>
+            <div class="${legacyUi.ribbonButton}" id="bringFront">
+                <span class="${legacyUi.ribbonIcon}">⬆⬆</span>
+                <span class="${legacyUi.ribbonLabel}">Naar voor</span>
             </div>`
 
         // -- Add an icon of a floppy (save symbol) like the icons above --
@@ -1585,102 +1589,40 @@ export class SituationPlanView {
         if (globalThis.autoSaver && globalThis.autoSaver.hasChangesSinceLastManualSave()) {
             outputleft += `
                 <span style="display: inline-block; width: 10px;"></span>
-                <div class="highlight-warning-big" style="width: 64px; display: inline-block; vertical-align: middle; text-align: center;" id="button_save" onclick="exportjson(false)" onmouseover="this.style.cursor='pointer'" onmouseout="this.style.cursor='default'">
-                    <span class="icon-image" style="font-size:24px">💾</span>
-                    <span class="icon-text" style="display: inline-block; width: 100%;">Opslaan</span>
+                <div class="${legacyUi.ribbonButton} border-orange-400 bg-orange-50" id="button_save" onclick="exportjson(false)">
+                    <span class="${legacyUi.ribbonIcon}">💾</span>
+                    <span class="${legacyUi.ribbonLabel}">Opslaan</span>
                 </div>`
         } else {
             outputleft += `
                 <span style="display: inline-block; width: 10px;"></span>
-                <div class="highlight-ok-big" id="button_save" style="width: 64px; display: inline-block; vertical-align: middle; text-align: center;" onmouseover="this.style.cursor='pointer'" onmouseout="this.style.cursor='default'" onclick="topMenu.selectMenuItemByName('Bestand')">
-                    <span class="icon-image" style="font-size:24px; filter: grayscale(100%); opacity: 0.5;">💾</span>
-                    <span class="icon-text" style="display: inline-block; width: 100%;">Bestand</span>
+                <div class="${legacyUi.ribbonButton} border-green-300 bg-green-50" id="button_save" onclick="topMenu.selectMenuItemByName('Bestand')">
+                    <span class="${legacyUi.ribbonIcon} grayscale opacity-50">💾</span>
+                    <span class="${legacyUi.ribbonLabel}">Bestand</span>
                 </div>`
         }
-
-        // -- Visuals om pagina te selecteren --
-
-        outputleft += `
-            <span style="display: inline-block; width: 50px;"></span>
-            <div>
-                <center>
-                    <span style="display: inline-block; white-space: nowrap;">Pagina
-                        <select id="id_sitplanpage">`;
-        for (let i = 1; i <= this.sitplan.numPages; i++) {
-            outputleft += '<option value="' + i + '"' + (i == this.sitplan.activePage ? ' selected' : '') + '>' + i + '</option>';
-        }
-
-        outputleft += `
-                        </select>
-                    </span><br><span style="display: inline-block; white-space: nowrap;">
-                        <button id="btn_sitplan_addpage" ${(this.sitplan.activePage != this.sitplan.numPages ? ' disabled' : '')}>Nieuw</button>
-                        <button id="btn_sitplan_delpage" style="background-color:red;" ${(this.sitplan.numPages <= 1 ? ' disabled' : '')}>&#9851;</button>
-                    </span>
-                </center>
-            </div>`;
 
         // -- Visuals om pagina te zoomen --
 
         outputright += `
             <span style="display: inline-block; width: 10px;"></span>
-            <div class="icon" id="button_zoomin">
-                <span class="icon-image" style="font-size: 24px;">🔍</span>
-                <span class="icon-text">In</span>
+            <div class="${legacyUi.ribbonButton}" id="button_zoomin">
+                <span class="${legacyUi.ribbonIcon}">🔍</span>
+                <span class="${legacyUi.ribbonLabel}">In</span>
             </div>
-            <div class="icon" id="button_zoomout">
-                <span class="icon-image" style="font-size: 24px;">🌍</span>
-                <span class="icon-text">Uit</span>
+            <div class="${legacyUi.ribbonButton}" id="button_zoomout">
+                <span class="${legacyUi.ribbonIcon}">🌍</span>
+                <span class="${legacyUi.ribbonLabel}">Uit</span>
             </div>
-            <div class="icon" id="button_zoomToFit">
-                <span class="icon-image" style="font-size: 24px;">🖥️</span>
-                <!--<img src="gif/scaleup.png" alt="Schermvullend" class="icon-image">-->
-                <span class="icon-text">Schermvullend</span>
+            <div class="${legacyUi.ribbonButton}" id="button_zoomToFit">
+                <span class="${legacyUi.ribbonIcon}">🖥️</span>
+                <span class="${legacyUi.ribbonLabel}">Schermvullend</span>
             </div>
             <span style="display: inline-block; width: 10px;"></span>`;
 
         // -- Put everything in the ribbon --
 
-        document.getElementById("ribbon").innerHTML = `<div id="left-icons">${outputleft}</div><div id="right-icons">${outputright}</div>`;
-
-        // -- Actions om pagina te selecteren --
-
-        document.getElementById('id_sitplanpage')!.onchange = (event: Event) => {
-            this.contextMenu.hide();
-            const target = event.target as HTMLSelectElement;
-            this.selectPage(Number(target.value));
-            globalThis.undostruct.store("changePage");
-        };
-
-        document.getElementById('btn_sitplan_addpage')!.onclick = () => {
-            this.contextMenu.hide();
-            this.sitplan.numPages++;
-            this.selectPage(this.sitplan.numPages);
-            globalThis.undostruct.store();
-        };
-
-        document.getElementById('btn_sitplan_delpage')!.onclick = () => {
-            this.contextMenu.hide();
-            const dialog = new Dialog('Pagina verwijderen', `Pagina ${this.sitplan.activePage} volledig verwijderen?`,
-                [
-                    {
-                        text: 'OK', callback: (() => {
-                            this.wipePage(this.sitplan.activePage);
-                            //set page of all sitplan.elements with page>page one lower
-                            this.sitplan.elements.forEach(element => {
-                                if (element.page > this.sitplan.activePage) {
-                                    element.page--;
-                                }
-                            });
-                            if (this.sitplan.numPages > 1) this.sitplan.numPages--;
-                            this.selectPage(Math.min(this.sitplan.activePage, this.sitplan.numPages))
-                            globalThis.undostruct.store();
-                        }).bind(this)
-                    },
-                    { text: 'Annuleren', callback: () => { } }
-
-                ]);
-            dialog.show();
-        };
+        document.getElementById("ribbon").innerHTML = `<div id="left-icons" class="flex flex-wrap items-center gap-1">${outputleft}</div><div id="right-icons" class="ml-auto flex items-center gap-1">${outputright}</div>`;
 
         // -- Actions om elementen toe te voegen of verwijderen --
 
@@ -1714,6 +1656,7 @@ export function showSituationPlanPage() {
     globalThis.toggleAppView('draw');
 
     if (!(globalThis.structure.sitplan)) { globalThis.structure.sitplan = new SituationPlan() };
+    globalThis.situationPlanStore.synchronizeLegacyDocument(globalThis.structure);
 
     if (!(globalThis.structure.sitplanview)) {
         //Verwijder eerst alle elementen op de DOM met id beginnend met "SP_" om eventuele wezen
@@ -1724,7 +1667,7 @@ export function showSituationPlanPage() {
         globalThis.structure.sitplanview = new SituationPlanView(
             document.getElementById('canvas'),
             document.getElementById('paper'),
-            globalThis.structure.sitplan);
+            globalThis.situationPlanStore);
 
         globalThis.structure.sitplanview.zoomToFit();
     };
