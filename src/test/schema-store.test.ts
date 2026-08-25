@@ -168,6 +168,30 @@ describe("LegacySchemaStore", () => {
     expect(store.getSnapshot().boardLayouts[0].placements).toHaveLength(1);
   });
 
+  it("configures board dimensions atomically and protects occupied positions", () => {
+    const { store, boardId } = createStore();
+    const circuitId = store.commands.addItem(boardId, "Kring");
+    store.commands.configureBoardLayout("main", { moduleCapacity: 12, rowCount: 2 });
+    const secondRail = store.getSnapshot().boardLayouts[0].rails[1];
+    store.commands.placeBoardLayoutItem("main", circuitId, {
+      railId: secondRail.id,
+      startModule: 10,
+      moduleWidth: 2,
+    });
+
+    expect(store.getSnapshot().boardLayouts[0].rails).toHaveLength(2);
+    expect(() => store.commands.configureBoardLayout("main", {
+      moduleCapacity: 11,
+      rowCount: 2,
+    })).toThrowError(expect.objectContaining({ code: "INVALID_BOARD_LAYOUT" }));
+    expect(() => store.commands.configureBoardLayout("main", {
+      moduleCapacity: 12,
+      rowCount: 1,
+    })).toThrowError(expect.objectContaining({ code: "INVALID_BOARD_LAYOUT" }));
+    expect(store.getSnapshot().boardLayouts[0].rails).toHaveLength(2);
+    expect(store.getSnapshot().boardLayouts[0].rails[0].moduleCapacity).toBe(12);
+  });
+
   it("updates properties and changes type through the legacy domain factory", () => {
     const { store, boardId } = createStore();
     const circuitId = store.commands.addItem(boardId, "Kring");

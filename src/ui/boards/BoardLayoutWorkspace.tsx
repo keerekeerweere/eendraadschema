@@ -1,195 +1,441 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type DragEvent,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import type { EditorStore } from "../../application/EditorStore";
 import type { SchemaStore } from "../../application/SchemaStore";
+import type { BoardLayoutPlacement } from "../../domain/BoardLayout";
 import { useEditorSnapshot } from "../useEditorSnapshot";
 import { useSchemaSnapshot } from "../useSchemaSnapshot";
-import { getItemPresentation } from "../../application/DossierReader";
 
 interface BoardLayoutWorkspaceProps {
   readonly schemaStore: SchemaStore;
   readonly editorStore: EditorStore;
 }
 
+interface BoardSlot {
+  readonly railId: string;
+  readonly railName: string;
+  readonly startModule: number;
+}
+
+const CIRCUIT_DRAG_TYPE = "application/x-eendraadschema-circuit";
+
 export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWorkspaceProps) {
   const schema = useSchemaSnapshot(schemaStore);
   const editor = useEditorSnapshot(editorStore);
-  const board = schema.document.getBoard(editor.activeBoardId);
-  const layout = schema.boardLayouts.find(candidate => candidate.boardId === editor.activeBoardId);
-  const boardItems = useMemo(() => schema.document.getAllItems().filter(item => (
+  const boards = schema.document.getBoards();
+  const board = schema.document.getBoard(editor.activeBoardId) ?? boards[0];
+  const layout = schema.boardLayouts.find(candidate => candidate.boardId === board?.id);
+  const circuits = useMemo(() => schema.document.getAllItems().filter(item => (
     item.role === "item"
-    && schema.document.getBoardForItem(item.id)?.id === editor.activeBoardId
-    && getItemPresentation(item.type) === "panel-device"
-  )), [editor.activeBoardId, schema]);
-  const placedItemIds = new Set(layout?.placements.map(placement => placement.itemId) ?? []);
-  const unplacedItems = boardItems.filter(item => !placedItemIds.has(item.id));
-  const [itemId, setItemId] = useState("");
-  const [railId, setRailId] = useState("");
-  const [startModule, setStartModule] = useState("1");
-  const [moduleWidth, setModuleWidth] = useState("1");
+    && item.type === "Kring"
+    && schema.document.getBoardForItem(item.id)?.id === board?.id
+  )), [board?.id, schema]);
+  const placementsByItemId = new Map(
+    (layout?.placements ?? []).map(placement => [placement.itemId, placement]),
+  );
+  const unplacedCircuits = circuits.filter(item => !placementsByItemId.has(item.id));
+  const placedCircuits = circuits.filter(item => placementsByItemId.has(item.id));
+  const [selectedCircuitId, setSelectedCircuitId] = useState<number | null>(null);
+  const [widths, setWidths] = useState<Readonly<Record<number, number>>>({});
+  const [moduleCapacity, setModuleCapacity] = useState("18");
+  const [rowCount, setRowCount] = useState("3");
+  const [pendingSlot, setPendingSlot] = useState<BoardSlot | null>(null);
+  const [dialogCircuitId, setDialogCircuitId] = useState("");
+  const [dialogWidth, setDialogWidth] = useState("1");
+  const [draggedCircuitId, setDraggedCircuitId] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const selectedCircuitAvailable = selectedCircuitId === null
+    || unplacedCircuits.some(item => item.id === selectedCircuitId);
 
   useEffect(() => {
-    if (!unplacedItems.some(item => String(item.id) === itemId)) {
-      setItemId(unplacedItems[0] ? String(unplacedItems[0].id) : "");
+    setSelectedCircuitId(null);
+    setPendingSlot(null);
+    setError("");
+  }, [board?.id]);
+
+  useEffect(() => {
+    setModuleCapacity(String(layout?.rails[0]?.moduleCapacity ?? 18));
+    setRowCount(String(layout?.rails.length || 3));
+  }, [layout?.rails.length, layout?.rails[0]?.moduleCapacity]);
+
+  useEffect(() => {
+    if (!selectedCircuitAvailable) {
+      setSelectedCircuitId(null);
     }
-    if (!layout?.rails.some(rail => rail.id === railId)) {
-      setRailId(layout?.rails[0]?.id ?? "");
-    }
-  }, [itemId, layout, railId, unplacedItems]);
+  }, [selectedCircuitAvailable]);
 
   if (!board) {
-    return <section className="p-6">Het actieve verdeelbord bestaat niet.</section>;
+    return <section className="p-6">Er is nog geen verdeelbord om in te delen.</section>;
   }
 
-  function run(command: () => void) {
+  function run(command: () => void): boolean {
     try {
       command();
       setError("");
+      return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "De bordindeling kon niet worden aangepast.");
+      return false;
     }
   }
 
-  function addPlacement(event: FormEvent<HTMLFormElement>) {
+  function selectBoard(boardId: string) {
+    editorStore.commands.selectBoard(boardId);
+  }
+
+  function configureBoard(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const selectedItemId = Number(itemId);
-    const start = Number(startModule) - 1;
-    const width = Number(moduleWidth);
-    if (!Number.isInteger(selectedItemId) || !railId) {
-      setError("Kies een onderdeel en een bordrij.");
-      return;
-    }
-    run(() => schemaStore.commands.placeBoardLayoutItem(editor.activeBoardId, selectedItemId, {
-      railId,
-      startModule: start,
-      moduleWidth: width,
+    run(() => schemaStore.commands.configureBoardLayout(board.id, {
+      moduleCapacity: Number(moduleCapacity),
+      rowCount: Number(rowCount),
     }));
   }
 
-  const fieldClass = "rounded border border-neutral-300 bg-white px-3 py-2 text-sm";
-  const buttonClass = "rounded bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800";
+  function getCircuitWidth(itemId: number): number {
+    return widths[itemId] ?? 1;
+  }
+
+  function setCircuitWidth(itemId: number, value: string) {
+    const width = Number(value);
+    if (!Number.isInteger(width) || width < 1) return;
+    setWidths(current => ({ ...current, [itemId]: width }));
+  }
+
+  function placeCircuit(itemId: number, slot: BoardSlot, width = getCircuitWidth(itemId)) {
+    const placed = run(() => schemaStore.commands.placeBoardLayoutItem(board.id, itemId, {
+      railId: slot.railId,
+      startModule: slot.startModule,
+      moduleWidth: width,
+    }));
+    if (placed) {
+      setSelectedCircuitId(null);
+      setPendingSlot(null);
+      editorStore.commands.selectItem(itemId);
+    }
+  }
+
+  function clickSlot(slot: BoardSlot) {
+    if (selectedCircuitId !== null) {
+      placeCircuit(selectedCircuitId, slot);
+      return;
+    }
+    if (unplacedCircuits.length === 0) return;
+    setPendingSlot(slot);
+    setDialogCircuitId(String(unplacedCircuits[0].id));
+    setDialogWidth(String(getCircuitWidth(unplacedCircuits[0].id)));
+  }
+
+  function startDrag(event: DragEvent<HTMLButtonElement>, itemId: number) {
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(CIRCUIT_DRAG_TYPE, String(itemId));
+    setDraggedCircuitId(itemId);
+  }
+
+  function dropCircuit(event: DragEvent<HTMLButtonElement>, slot: BoardSlot) {
+    event.preventDefault();
+    const itemId = Number(event.dataTransfer.getData(CIRCUIT_DRAG_TYPE));
+    setDraggedCircuitId(null);
+    setDropTarget(null);
+    if (unplacedCircuits.some(item => item.id === itemId)) placeCircuit(itemId, slot);
+  }
+
+  function submitSlotDialog(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!pendingSlot) return;
+    placeCircuit(Number(dialogCircuitId), pendingSlot, Number(dialogWidth));
+  }
+
+  const fieldClass = "min-h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100";
+  const railById = new Map((layout?.rails ?? []).map(rail => [rail.id, rail]));
 
   return (
-    <section className="h-full overflow-auto bg-neutral-100 p-5" aria-label="Fysieke bordindeling">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="m-0 text-xs font-semibold uppercase tracking-wide text-blue-700">Bordindeling</p>
-            <h1 className="my-1 text-2xl font-bold">{board.name}</h1>
-            <p className="m-0 text-sm text-neutral-600">
-              Plaats onderdelen handmatig op DIN-rijen. Posities worden opgeslagen in het EDS-bestand.
-            </p>
-          </div>
-          <button
-            type="button"
-            className={buttonClass}
-            onClick={() => run(() => schemaStore.commands.addBoardLayoutRail(editor.activeBoardId))}
-          >
-            Bordrij toevoegen
-          </button>
+    <section className="flex h-full min-h-0 flex-col bg-neutral-100 text-neutral-900" aria-label="Fysieke bordindeling">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-neutral-200 bg-white px-5 py-4">
+        <div>
+          <p className="m-0 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Bordindeling</p>
+          <h1 className="mb-0 mt-1 text-xl font-semibold">Stel je verdeelbord samen</h1>
         </div>
+        <label className="grid min-w-56 gap-1 text-xs font-semibold text-neutral-600">
+          Verdeelbord
+          <select
+            className={fieldClass}
+            value={board.id}
+            onChange={event => selectBoard(event.target.value)}
+          >
+            {boards.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+          </select>
+        </label>
+      </header>
 
-        {error ? <p className="rounded bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p> : null}
+      {error ? <p className="m-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">{error}</p> : null}
 
-        <div className="mt-5 grid gap-4">
-          {layout?.rails.map((rail) => {
-            const placements = layout.placements.filter(placement => placement.railId === rail.id);
-            return (
-              <article key={rail.id} className="rounded-lg border border-neutral-300 bg-white p-4 shadow-sm">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h2 className="m-0 text-base font-semibold">{rail.name}</h2>
-                    <p className="m-0 text-xs text-neutral-500">{rail.moduleCapacity} modules</p>
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[19rem_minmax(0,1fr)]">
+        <aside className="overflow-y-auto border-r border-neutral-200 bg-white" aria-label="Kringen van het verdeelbord">
+          <form className="grid grid-cols-2 gap-2 border-b border-neutral-200 p-4" onSubmit={configureBoard}>
+            <div className="col-span-2">
+              <p className="m-0 text-xs font-semibold uppercase tracking-wide text-neutral-500">Bordformaat</p>
+              <p className="mb-1 mt-1 text-sm text-neutral-600">{board.name}{board.location ? ` · ${board.location}` : ""}</p>
+            </div>
+            <label className="grid gap-1 text-xs font-medium text-neutral-600">
+              Modules breed
+              <input className={`${fieldClass} min-w-0`} aria-label="Modules breed" type="number" min="1" max="72" value={moduleCapacity} onChange={event => setModuleCapacity(event.target.value)} />
+            </label>
+            <label className="grid gap-1 text-xs font-medium text-neutral-600">
+              Aantal rijen
+              <input className={`${fieldClass} min-w-0`} aria-label="Aantal rijen" type="number" min="1" max="12" value={rowCount} onChange={event => setRowCount(event.target.value)} />
+            </label>
+            <button type="submit" className="col-span-2 min-h-10 rounded-md bg-neutral-900 px-3 text-sm font-semibold text-white hover:bg-neutral-700">
+              Formaat toepassen
+            </button>
+          </form>
+
+          <CircuitSection title="Nog te plaatsen" count={unplacedCircuits.length}>
+            {unplacedCircuits.map(item => {
+              const selected = selectedCircuitId === item.id;
+              return (
+                <li key={item.id} className="border-b border-neutral-100">
+                  <div className={selected ? "bg-blue-50 p-2.5" : "p-2.5 hover:bg-neutral-50"}>
+                    <button
+                      type="button"
+                      draggable
+                      className="flex w-full cursor-grab items-center gap-2 text-left active:cursor-grabbing"
+                      onClick={() => {
+                        setSelectedCircuitId(item.id);
+                        editorStore.commands.selectItem(item.id);
+                      }}
+                      onDragStart={event => startDrag(event, item.id)}
+                      onDragEnd={() => {
+                        setDraggedCircuitId(null);
+                        setDropTarget(null);
+                      }}
+                    >
+                      <span className="text-neutral-400" aria-hidden="true">⠿</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">{item.label}</span>
+                        <span className="block truncate text-xs text-neutral-500">Sleep naar het bord of selecteer en klik</span>
+                      </span>
+                    </button>
+                    <label className="mt-2 flex items-center justify-between gap-2 text-xs text-neutral-600">
+                      Breedte
+                      <span className="flex items-center gap-1">
+                        <input
+                          className="h-8 w-16 rounded border border-neutral-300 px-2 text-right"
+                          aria-label={`Breedte voor ${item.label}`}
+                          type="number"
+                          min="1"
+                          max={Number(moduleCapacity) || 72}
+                          value={getCircuitWidth(item.id)}
+                          onChange={event => setCircuitWidth(item.id, event.target.value)}
+                        />
+                        <span>M</span>
+                      </span>
+                    </label>
                   </div>
+                </li>
+              );
+            })}
+            {unplacedCircuits.length === 0 ? <EmptyList>Alle kringen zijn geplaatst.</EmptyList> : null}
+          </CircuitSection>
+
+          <CircuitSection title="Geplaatst" count={placedCircuits.length}>
+            {placedCircuits.map(item => {
+              const placement = placementsByItemId.get(item.id);
+              const rail = placement ? railById.get(placement.railId) : undefined;
+              return (
+                <li key={item.id}>
                   <button
                     type="button"
-                    className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
-                    onClick={() => run(() => schemaStore.commands.deleteBoardLayoutRail(
-                      editor.activeBoardId,
-                      rail.id,
-                    ))}
+                    className="flex w-full items-center justify-between gap-3 border-b border-neutral-100 px-3 py-2.5 text-left hover:bg-neutral-50"
+                    onClick={() => editorStore.commands.selectItem(item.id)}
                   >
-                    Rij verwijderen
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{item.label}</span>
+                      <span className="block text-xs text-neutral-500">{rail?.name} · module {(placement?.startModule ?? 0) + 1}</span>
+                    </span>
+                    <span className="shrink-0 rounded bg-neutral-100 px-2 py-1 text-xs font-semibold">{placement?.moduleWidth}M</span>
                   </button>
-                </div>
-                <div className="overflow-x-auto rounded border border-neutral-400 bg-neutral-200 p-2">
-                  <div
-                    className="grid min-w-max"
-                    style={{ gridTemplateColumns: `repeat(${rail.moduleCapacity}, minmax(2rem, 1fr))` }}
-                  >
-                    {Array.from({ length: rail.moduleCapacity }, (_, index) => (
-                      <span
-                        key={index}
-                        className="h-20 border-r border-neutral-300 bg-white/70 text-center text-[10px] text-neutral-400"
-                        style={{ gridColumn: index + 1, gridRow: 1 }}
-                      >
-                        {index + 1}
-                      </span>
-                    ))}
-                    {placements.map((placement) => {
-                      const item = schema.document.getItem(placement.itemId);
-                      return (
-                        <button
-                          key={placement.itemId}
-                          type="button"
-                          className={[
-                            "z-10 m-1 overflow-hidden rounded border-2 px-2 text-left text-xs font-semibold shadow-sm",
-                            editor.selectedItemId === placement.itemId
-                              ? "border-blue-700 bg-blue-100 text-blue-950"
-                              : "border-neutral-500 bg-neutral-50 text-neutral-800 hover:border-blue-500",
-                          ].join(" ")}
-                          style={{
-                            gridColumn: `${placement.startModule + 1} / span ${placement.moduleWidth}`,
-                            gridRow: 1,
-                          }}
-                          onClick={() => editorStore.commands.selectItem(placement.itemId)}
-                          title={`${item?.label ?? `Onderdeel ${placement.itemId}`} · ${placement.moduleWidth} modules`}
-                        >
-                          <span className="block truncate">{item?.label ?? `Onderdeel ${placement.itemId}`}</span>
-                          <span className="block font-normal text-neutral-500">{placement.moduleWidth}M</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-          {!layout || layout.rails.length === 0 ? (
-            <div className="rounded-lg border-2 border-dashed border-neutral-300 bg-white p-8 text-center text-neutral-600">
-              Voeg de eerste bordrij toe om de fysieke indeling te beginnen.
-            </div>
-          ) : null}
-        </div>
+                </li>
+              );
+            })}
+          </CircuitSection>
+        </aside>
 
-        {layout && layout.rails.length > 0 ? (
-          <form className="mt-5 grid gap-3 rounded-lg border border-neutral-300 bg-white p-4 md:grid-cols-2" onSubmit={addPlacement}>
-            <label className="grid gap-1 text-xs font-semibold text-neutral-600 md:col-span-2">
-              Ongeplaatst onderdeel
-              <select className={fieldClass} value={itemId} onChange={event => setItemId(event.target.value)}>
-                {unplacedItems.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
-            </label>
-            <label className="grid gap-1 text-xs font-semibold text-neutral-600 md:col-span-2">
-              Bordrij
-              <select className={fieldClass} value={railId} onChange={event => setRailId(event.target.value)}>
-                {layout.rails.map(rail => <option key={rail.id} value={rail.id}>{rail.name}</option>)}
-              </select>
-            </label>
-            <label className="grid gap-1 text-xs font-semibold text-neutral-600">
-              Startmodule
-              <input className={fieldClass} type="number" min="1" value={startModule} onChange={event => setStartModule(event.target.value)} />
-            </label>
-            <label className="grid gap-1 text-xs font-semibold text-neutral-600">
-              Breedte
-              <div className="flex gap-2">
-                <input className={`${fieldClass} min-w-0 flex-1`} type="number" min="1" value={moduleWidth} onChange={event => setModuleWidth(event.target.value)} />
-                <button type="submit" className={buttonClass} disabled={!itemId}>Plaatsen</button>
+        <main className="min-w-0 overflow-auto p-4 sm:p-6">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="m-0 text-lg font-semibold">{board.name}</h2>
+              <p className="mb-0 mt-1 text-sm text-neutral-600">
+                {selectedCircuitId === null
+                  ? "Sleep een kring naar een vrije positie, of klik op een lege module."
+                  : `Klik op een vrije module om ${schema.document.getItem(selectedCircuitId)?.label ?? "de kring"} te plaatsen.`}
+              </p>
+            </div>
+            {layout && layout.rails.length > 0 ? (
+              <span className="rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-600">
+                {layout.rails[0].moduleCapacity} modules × {layout.rails.length} rijen
+              </span>
+            ) : null}
+          </div>
+
+          {!layout || layout.rails.length === 0 ? (
+            <div className="grid min-h-64 place-items-center rounded-xl border-2 border-dashed border-neutral-300 bg-white p-8 text-center">
+              <div>
+                <p className="m-0 text-base font-semibold">Geef eerst het formaat van dit bord op</p>
+                <p className="mb-0 mt-1 text-sm text-neutral-500">Kies links het aantal modules en rijen en pas het formaat toe.</p>
               </div>
-            </label>
-          </form>
-        ) : null}
+            </div>
+          ) : (
+            <div className="min-w-max overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-sm">
+              <div className="flex h-10 items-center border-b border-neutral-300 bg-neutral-800 px-4 text-xs font-semibold uppercase tracking-wide text-white">
+                DIN-verdeelbord
+              </div>
+              <div className="space-y-5 bg-neutral-200 p-4 sm:p-6">
+                {layout.rails.map(rail => {
+                  const railPlacements = layout.placements.filter(placement => placement.railId === rail.id);
+                  return (
+                    <article key={rail.id} aria-label={rail.name}>
+                      <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-neutral-600">
+                        <span>{rail.name}</span>
+                        <span>{rail.moduleCapacity}M</span>
+                      </div>
+                      <div
+                        className="grid overflow-hidden rounded-md border border-neutral-400 bg-white"
+                        style={{ gridTemplateColumns: `repeat(${rail.moduleCapacity}, minmax(2.75rem, 1fr))` }}
+                      >
+                        {Array.from({ length: rail.moduleCapacity }, (_, index) => {
+                          const slot: BoardSlot = { railId: rail.id, railName: rail.name, startModule: index };
+                          const occupied = findPlacementAt(railPlacements, index);
+                          const targetId = `${rail.id}:${index}`;
+                          return (
+                            <button
+                              key={index}
+                              type="button"
+                              className={[
+                                "h-24 border-r border-neutral-200 p-1 text-left text-[10px] text-neutral-400 outline-none",
+                                occupied ? "cursor-default" : "hover:bg-blue-50 focus:bg-blue-50",
+                                dropTarget === targetId ? "bg-blue-100 ring-2 ring-inset ring-blue-600" : "bg-white",
+                              ].join(" ")}
+                              style={{ gridColumn: index + 1, gridRow: 1 }}
+                              disabled={occupied !== undefined}
+                              aria-label={`Lege positie ${rail.name}, module ${index + 1}`}
+                              onClick={() => clickSlot(slot)}
+                              onDragOver={(event) => {
+                                if (draggedCircuitId === null) return;
+                                event.preventDefault();
+                                event.dataTransfer.dropEffect = "copy";
+                                setDropTarget(targetId);
+                              }}
+                              onDragLeave={() => setDropTarget(current => current === targetId ? null : current)}
+                              onDrop={event => dropCircuit(event, slot)}
+                            >
+                              {index + 1}
+                            </button>
+                          );
+                        })}
+                        {railPlacements.map(placement => (
+                          <PlacedCircuit
+                            key={placement.itemId}
+                            placement={placement}
+                            label={schema.document.getItem(placement.itemId)?.label ?? `Kring ${placement.itemId}`}
+                            selected={editor.selectedItemId === placement.itemId}
+                            onSelect={() => editorStore.commands.selectItem(placement.itemId)}
+                          />
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </main>
       </div>
+
+      {pendingSlot ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4" onMouseDown={() => setPendingSlot(null)}>
+          <form
+            className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl"
+            aria-label="Kring op lege positie plaatsen"
+            onSubmit={submitSlotDialog}
+            onMouseDown={event => event.stopPropagation()}
+          >
+            <p className="m-0 text-xs font-semibold uppercase tracking-wide text-blue-700">{pendingSlot.railName} · module {pendingSlot.startModule + 1}</p>
+            <h2 className="mb-4 mt-1 text-lg font-semibold">Kring toevoegen</h2>
+            <label className="grid gap-1 text-xs font-semibold text-neutral-600">
+              Kring
+              <select className={fieldClass} value={dialogCircuitId} onChange={event => setDialogCircuitId(event.target.value)}>
+                {unplacedCircuits.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+            </label>
+            <label className="mt-3 grid gap-1 text-xs font-semibold text-neutral-600">
+              Breedte in modules
+              <input className={fieldClass} type="number" min="1" max={Number(moduleCapacity) || 72} value={dialogWidth} onChange={event => setDialogWidth(event.target.value)} />
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-semibold" onClick={() => setPendingSlot(null)}>Annuleren</button>
+              <button type="submit" className="rounded-md bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800">Kring plaatsen</button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </section>
   );
+}
+
+function CircuitSection({ title, count, children }: { readonly title: string; readonly count: number; readonly children: ReactNode }) {
+  return (
+    <section>
+      <header className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-3 py-2">
+        <h2 className="m-0 text-xs font-semibold uppercase tracking-wide text-neutral-600">{title}</h2>
+        <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs font-semibold text-neutral-600">{count}</span>
+      </header>
+      <ul className="m-0 list-none p-0">{children}</ul>
+    </section>
+  );
+}
+
+function EmptyList({ children }: { readonly children: ReactNode }) {
+  return <li className="px-3 py-4 text-sm text-neutral-500">{children}</li>;
+}
+
+function PlacedCircuit({ placement, label, selected, onSelect }: {
+  readonly placement: BoardLayoutPlacement;
+  readonly label: string;
+  readonly selected: boolean;
+  readonly onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={[
+        "z-10 m-1 flex min-w-0 flex-col justify-between overflow-hidden rounded border-2 px-2 py-2 text-left shadow-sm",
+        selected
+          ? "border-blue-700 bg-blue-100 text-blue-950"
+          : "border-neutral-500 bg-neutral-50 text-neutral-800 hover:border-blue-500",
+      ].join(" ")}
+      style={{ gridColumn: `${placement.startModule + 1} / span ${placement.moduleWidth}`, gridRow: 1 }}
+      onClick={onSelect}
+      title={`${label} · ${placement.moduleWidth} modules`}
+    >
+      <span className="block w-full truncate text-xs font-semibold">{label}</span>
+      <span className="text-[10px] font-medium text-neutral-500">{placement.moduleWidth}M</span>
+    </button>
+  );
+}
+
+function findPlacementAt(
+  placements: readonly BoardLayoutPlacement[],
+  moduleIndex: number,
+): BoardLayoutPlacement | undefined {
+  return placements.find(placement => (
+    placement.startModule <= moduleIndex
+    && moduleIndex < placement.startModule + placement.moduleWidth
+  ));
 }

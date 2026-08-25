@@ -95,6 +95,41 @@ test("creates a circuit through the dossier under the selected board", async ({ 
   await expect(properties.getByLabel("Kabeltype")).toHaveValue("XVB Cca 3G2,5");
 });
 
+test("builds a board layout by size, click, and drag-and-drop", async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on("console", message => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  await loadExample(page, 1);
+
+  await page.getByRole("navigation", { name: "Werkruimteweergave" })
+    .getByRole("button", { name: "Bordindeling" }).click();
+  const boardWorkspace = page.getByRole("region", { name: "Fysieke bordindeling" });
+  await expect(boardWorkspace.getByRole("heading", { name: "Stel je verdeelbord samen" })).toBeVisible();
+  await expect(page.locator("#react-workspace-sidebar")).toHaveClass(/hidden/);
+  await expect(page.locator("#properties_col")).not.toHaveClass("hidden");
+  await expect(boardWorkspace.getByRole("combobox", { name: "Verdeelbord" })).toHaveValue("main");
+  await boardWorkspace.getByLabel("Modules breed").fill("12");
+  await boardWorkspace.getByLabel("Aantal rijen").fill("2");
+  await boardWorkspace.getByRole("button", { name: "Formaat toepassen" }).click();
+  await expect(page.getByText("12 modules × 2 rijen")).toBeVisible();
+
+  await page.getByRole("button", { name: "Lege positie Rij 1, module 1", exact: true }).click();
+  const placementDialog = page.getByRole("form", { name: "Kring op lege positie plaatsen" });
+  await expect(placementDialog).toBeVisible();
+  await placementDialog.getByLabel("Breedte in modules").fill("2");
+  await placementDialog.getByRole("button", { name: "Kring plaatsen" }).click();
+  await expect(page.getByText("12 modules × 2 rijen")).toBeVisible();
+
+  const palette = page.getByLabel("Kringen van het verdeelbord");
+  const draggableCircuit = palette.locator('button[draggable="true"]').first();
+  await draggableCircuit.locator("xpath=..").getByRole("spinbutton").fill("3");
+  await draggableCircuit.dragTo(page.getByRole("button", { name: "Lege positie Rij 2, module 3", exact: true }));
+  await expect(palette.getByRole("heading", { name: "Geplaatst" })).toBeVisible();
+  await expect(page.locator(".vite-error-overlay")).toHaveCount(0);
+  expect(consoleErrors).toEqual([]);
+});
+
 test("adds components at branch ends and between drawn components", async ({ page }) => {
   await loadExample(page, 0);
 
