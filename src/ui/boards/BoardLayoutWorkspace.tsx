@@ -9,6 +9,7 @@ import {
 import type { EditorStore } from "../../application/EditorStore";
 import type { SchemaStore } from "../../application/SchemaStore";
 import type { BoardLayoutPlacement } from "../../domain/BoardLayout";
+import type { HierarchyViewNode } from "../../application/SchemaDocumentReader";
 import { useEditorSnapshot } from "../useEditorSnapshot";
 import { useSchemaSnapshot } from "../useSchemaSnapshot";
 
@@ -24,6 +25,40 @@ interface BoardSlot {
 }
 
 const CIRCUIT_DRAG_TYPE = "application/x-eendraadschema-circuit";
+const PROTECTION_LABELS: Readonly<Record<string, string>> = {
+  automatisch: "Automaat",
+  differentieel: "Differentieel",
+  differentieelautomaat: "Differentieelautomaat",
+  smelt: "Smeltzekering",
+  geen: "Geen bescherming",
+  contact: "Contact",
+  zekeringscheider: "Zekeringscheider",
+  relais: "Relais",
+  schemer: "Schemerschakelaar",
+  overspanningsbeveiliging: "Overspanningsbeveiliging",
+};
+
+function protectionLabel(protection: string | undefined): string {
+  return protection ? (PROTECTION_LABELS[protection] ?? protection) : "Onbekend";
+}
+
+function circuitName(item: { readonly type?: string; readonly label: string; readonly summary: { readonly name?: string } }): string {
+  if (item.type === "Aansluiting") return item.summary.name ?? "Hoofddifferentieel";
+  return item.summary.name ?? (item.label.replace(/^(Kring|Aansluiting)\s*/, "") || "Naamloos");
+}
+
+function groupCircuitsByProtection(
+  circuits: readonly HierarchyViewNode[],
+): readonly [string, readonly HierarchyViewNode[]][] {
+  const groups = new Map<string, HierarchyViewNode[]>();
+  for (const circuit of circuits) {
+    const protection = circuit.summary.protection ?? "";
+    const group = groups.get(protection) ?? [];
+    group.push(circuit);
+    groups.set(protection, group);
+  }
+  return [...groups].map(([protection, group]) => [protection, group]);
+}
 
 export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWorkspaceProps) {
   const schema = useSchemaSnapshot(schemaStore);
@@ -33,7 +68,7 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
   const layout = schema.boardLayouts.find(candidate => candidate.boardId === board?.id);
   const circuits = useMemo(() => schema.document.getAllItems().filter(item => (
     item.role === "item"
-    && item.type === "Kring"
+    && ["Kring", "Aansluiting"].includes(item.type)
     && schema.document.getBoardForItem(item.id)?.id === board?.id
   )), [board?.id, schema]);
   const placementsByItemId = new Map(
@@ -177,7 +212,7 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
       {error ? <p className="m-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">{error}</p> : null}
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[19rem_minmax(0,1fr)]">
-        <aside className="overflow-y-auto border-r border-neutral-200 bg-white" aria-label="Kringen van het verdeelbord">
+        <aside className="overflow-y-auto border-r border-neutral-200 bg-white" aria-label="Modules van het verdeelbord">
           <form className="grid grid-cols-2 gap-2 border-b border-neutral-200 p-4" onSubmit={configureBoard}>
             <div className="col-span-2">
               <p className="m-0 text-xs font-semibold uppercase tracking-wide text-neutral-500">Bordformaat</p>
@@ -197,7 +232,11 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
           </form>
 
           <CircuitSection title="Nog te plaatsen" count={unplacedCircuits.length}>
-            {unplacedCircuits.map(item => {
+            {groupCircuitsByProtection(unplacedCircuits).map(([protection, groupedCircuits]) => (
+              <li key={protection} className="border-b border-neutral-200">
+                <h3 className="m-0 bg-neutral-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-600">{protectionLabel(protection)}</h3>
+                <ul className="m-0 list-none p-0">
+            {groupedCircuits.map(item => {
               const selected = selectedCircuitId === item.id;
               return (
                 <li key={item.id} className="border-b border-neutral-100">
@@ -218,12 +257,12 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
                     >
                       <span className="text-neutral-400" aria-hidden="true">⠿</span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold">{item.label}</span>
+                        <span className="block truncate text-sm font-semibold">{circuitName(item)}</span>
                         <span className="block truncate text-xs text-neutral-500">Sleep naar het bord of selecteer en klik</span>
                       </span>
                     </button>
                     <label className="mt-2 flex items-center justify-between gap-2 text-xs text-neutral-600">
-                      Breedte
+                      Modulebreedte
                       <span className="flex items-center gap-1">
                         <input
                           className="h-8 w-16 rounded border border-neutral-300 px-2 text-right"
@@ -241,7 +280,10 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
                 </li>
               );
             })}
-            {unplacedCircuits.length === 0 ? <EmptyList>Alle kringen zijn geplaatst.</EmptyList> : null}
+                </ul>
+              </li>
+            ))}
+            {unplacedCircuits.length === 0 ? <EmptyList>Alle modules zijn geplaatst.</EmptyList> : null}
           </CircuitSection>
 
           <CircuitSection title="Geplaatst" count={placedCircuits.length}>
@@ -256,7 +298,7 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
                     onClick={() => editorStore.commands.selectItem(item.id)}
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{item.label}</span>
+                      <span className="block truncate text-sm font-medium">{circuitName(item)}</span>
                       <span className="block text-xs text-neutral-500">{rail?.name} · module {(placement?.startModule ?? 0) + 1}</span>
                     </span>
                     <span className="shrink-0 rounded bg-neutral-100 px-2 py-1 text-xs font-semibold">{placement?.moduleWidth}M</span>
@@ -273,8 +315,8 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
               <h2 className="m-0 text-lg font-semibold">{board.name}</h2>
               <p className="mb-0 mt-1 text-sm text-neutral-600">
                 {selectedCircuitId === null
-                  ? "Sleep een kring naar een vrije positie, of klik op een lege module."
-                  : `Klik op een vrije module om ${schema.document.getItem(selectedCircuitId)?.label ?? "de kring"} te plaatsen.`}
+                  ? "Sleep een module naar een vrije positie, of klik op een lege module."
+                  : `Klik op een vrije module om ${circuitName(schema.document.getItem(selectedCircuitId) ?? { label: "de module", summary: {} })} te plaatsen.`}
               </p>
             </div>
             {layout && layout.rails.length > 0 ? (
@@ -343,7 +385,7 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
                           <PlacedCircuit
                             key={placement.itemId}
                             placement={placement}
-                            label={schema.document.getItem(placement.itemId)?.label ?? `Kring ${placement.itemId}`}
+                            item={schema.document.getItem(placement.itemId)}
                             selected={editor.selectedItemId === placement.itemId}
                             onSelect={() => editorStore.commands.selectItem(placement.itemId)}
                           />
@@ -362,25 +404,29 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4" onMouseDown={() => setPendingSlot(null)}>
           <form
             className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl"
-            aria-label="Kring op lege positie plaatsen"
+            aria-label="Module op lege positie plaatsen"
             onSubmit={submitSlotDialog}
             onMouseDown={event => event.stopPropagation()}
           >
             <p className="m-0 text-xs font-semibold uppercase tracking-wide text-blue-700">{pendingSlot.railName} · module {pendingSlot.startModule + 1}</p>
-            <h2 className="mb-4 mt-1 text-lg font-semibold">Kring toevoegen</h2>
+            <h2 className="mb-4 mt-1 text-lg font-semibold">Module toevoegen</h2>
             <label className="grid gap-1 text-xs font-semibold text-neutral-600">
-              Kring
+              Module
               <select className={fieldClass} value={dialogCircuitId} onChange={event => setDialogCircuitId(event.target.value)}>
-                {unplacedCircuits.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+                {groupCircuitsByProtection(unplacedCircuits).map(([protection, groupedCircuits]) => (
+                  <optgroup key={protection} label={protectionLabel(protection)}>
+                    {groupedCircuits.map(item => <option key={item.id} value={item.id}>{circuitName(item)}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </label>
             <label className="mt-3 grid gap-1 text-xs font-semibold text-neutral-600">
-              Breedte in modules
+              Modulebreedte
               <input className={fieldClass} type="number" min="1" max={Number(moduleCapacity) || 72} value={dialogWidth} onChange={event => setDialogWidth(event.target.value)} />
             </label>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-semibold" onClick={() => setPendingSlot(null)}>Annuleren</button>
-              <button type="submit" className="rounded-md bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800">Kring plaatsen</button>
+              <button type="submit" className="rounded-md bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800">Module plaatsen</button>
             </div>
           </form>
         </div>
@@ -405,12 +451,13 @@ function EmptyList({ children }: { readonly children: ReactNode }) {
   return <li className="px-3 py-4 text-sm text-neutral-500">{children}</li>;
 }
 
-function PlacedCircuit({ placement, label, selected, onSelect }: {
+function PlacedCircuit({ placement, item, selected, onSelect }: {
   readonly placement: BoardLayoutPlacement;
-  readonly label: string;
+  readonly item: HierarchyViewNode | undefined;
   readonly selected: boolean;
   readonly onSelect: () => void;
 }) {
+  const label = item ? circuitName(item) : "Naamloos";
   return (
     <button
       type="button"
@@ -424,8 +471,9 @@ function PlacedCircuit({ placement, label, selected, onSelect }: {
       onClick={onSelect}
       title={`${label} · ${placement.moduleWidth} modules`}
     >
+      <span className="block w-full truncate text-[10px] font-semibold uppercase tracking-wide">{item ? protectionLabel(item.summary.protection) : "Onbekend"}</span>
       <span className="block w-full truncate text-xs font-semibold">{label}</span>
-      <span className="text-[10px] font-medium text-neutral-500">{placement.moduleWidth}M</span>
+      {item?.summary.text ? <span className="block w-full truncate text-[10px] text-neutral-500">{item.summary.text}</span> : null}
     </button>
   );
 }

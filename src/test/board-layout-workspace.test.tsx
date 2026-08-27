@@ -33,10 +33,10 @@ describe("BoardLayoutWorkspace", () => {
     fireEvent.change(screen.getByLabelText("Aantal rijen"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Formaat toepassen" }));
     fireEvent.click(screen.getByRole("button", { name: "Lege positie Rij 1, module 2" }));
-    const itemSelect = screen.getByLabelText("Kring") as HTMLSelectElement;
+    const itemSelect = screen.getByLabelText("Module") as HTMLSelectElement;
     const placedItemId = Number(itemSelect.value);
-    fireEvent.change(screen.getByLabelText("Breedte in modules"), { target: { value: "2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Kring plaatsen" }));
+    fireEvent.change(screen.getByLabelText("Modulebreedte"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Module plaatsen" }));
 
     expect(schemaStore.getSnapshot().boardLayouts[0]).toMatchObject({
       boardId: "main",
@@ -66,10 +66,10 @@ describe("BoardLayoutWorkspace", () => {
     fireEvent.change(screen.getByLabelText("Verdeelbord"), { target: { value: secondBoardId } });
 
     expect((screen.getByLabelText("Verdeelbord") as HTMLSelectElement).value).toBe(secondBoardId);
-    const palette = screen.getByLabelText("Kringen van het verdeelbord");
+    const palette = screen.getByLabelText("Modules van het verdeelbord");
     const draggableItems = within(palette).getAllByRole("button").filter(button => button.draggable);
     expect(draggableItems).toHaveLength(1);
-    expect(draggableItems[0]).toHaveTextContent("Kring");
+    expect(draggableItems[0]).not.toHaveTextContent(/^Kring\b/);
     expect(within(palette).queryByText("Contactdoos")).not.toBeInTheDocument();
   });
 
@@ -89,7 +89,7 @@ describe("BoardLayoutWorkspace", () => {
     render(<BoardLayoutInspector schemaStore={schemaStore} editorStore={editorStore} />);
 
     fireEvent.change(screen.getByLabelText("Startmodule"), { target: { value: "3" } });
-    fireEvent.change(screen.getByLabelText("Breedte in modules"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Modulebreedte"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Positie toepassen" }));
 
     expect(schemaStore.getSnapshot().boardLayouts[0].placements[0]).toMatchObject({

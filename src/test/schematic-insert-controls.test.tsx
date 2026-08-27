@@ -62,4 +62,41 @@ describe("SchematicInsertControls", () => {
     expect(store.getSnapshot().document.getItem(socketId)?.parentId).toBe(inserted.id);
     expect(editorStore.getSnapshot().selectedItemId).toBe(inserted.id);
   });
+
+  it("adds a Leiding directly at the end of a Kring", () => {
+    const { store, editorStore, socketId } = renderControls();
+
+    fireEvent.click(screen.getByRole("button", { name: /na Contactdoos 1 toevoegen/ }));
+    const dialog = screen.getByRole("dialog", { name: "Onderdeel toevoegen" });
+    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Leiding" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Toevoegen" }));
+
+    const child = store.getSnapshot().document.getChildren(socketId)[0];
+    expect(child.type).toBe("Leiding");
+    expect(editorStore.getSnapshot().selectedItemId).toBe(child.id);
+  });
+
+  it("inserts a Leiding between two consumers in a Kring", () => {
+    const { store, editorStore, circuitId, socketId } = renderControls();
+
+    fireEvent.click(screen.getByRole("button", { name: /vóór Contactdoos 1 invoegen/ }));
+    const dialog = screen.getByRole("dialog", { name: "Onderdeel toevoegen" });
+    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Leiding" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Toevoegen" }));
+
+    const inserted = store.getSnapshot().document.getChildren(circuitId)[0];
+    expect(inserted.type).toBe("Leiding");
+    expect(store.getSnapshot().document.getItem(socketId)?.parentId).toBe(inserted.id);
+    expect(editorStore.getSnapshot().selectedItemId).toBe(inserted.id);
+
+    // Rendering should not throw even though a Leiding is now a direct child of a Kring.
+    expect(() => store.getLegacyDocument().toSVG(0, "horizontal")).not.toThrow();
+  });
+
+  it("anchors a Kring add-child button at the top of its vertical spine", () => {
+    renderControls();
+
+    const button = screen.getByRole("button", { name: /na Kring A toevoegen/ });
+    expect(button.style.top).toBe("0px");
+  });
 });

@@ -99,7 +99,7 @@ export function BoardNavigator({
                 <span>▣ {board.name}</span>
                 {board.location ? <small className="mt-0.5 text-neutral-500">{board.location}</small> : null}
                 {board.feeder ? (
-                  <small className="mt-0.5 text-neutral-500">Gevoed door {sourceBoard?.name ?? "Onbekend bord"} — {sourceCircuit?.label ?? `Kring ${board.feeder.sourceCircuitId}`}</small>
+                  <small className="mt-0.5 text-neutral-500">Gevoed door {sourceBoard?.name ?? "Onbekend bord"} — {sourceCircuit?.summary.name ?? sourceCircuit?.label.replace(/^Kring\s*/, "") ?? `Module ${board.feeder.sourceCircuitId}`}</small>
                 ) : <small className="mt-0.5 text-neutral-500">Hoofdbord</small>}
               </button>
             </li>
@@ -146,7 +146,7 @@ export function BoardNavigator({
           <label>Locatie<input value={location} onChange={(event) => setLocation(event.target.value)} /></label>
           <label>Gevoed door
             <select required value={feederCircuitId} onChange={(event) => setFeederCircuitId(event.target.value)}>
-              <option value="">Kies een kring</option>
+              <option value="">Kies een module</option>
               {circuits.map((circuit) => {
                 const board = document.getBoardForItem(circuit.id);
                 return <option key={circuit.id} value={circuit.id}>{board?.name ?? "Onbekend bord"} — {circuit.label}</option>;

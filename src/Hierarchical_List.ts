@@ -971,7 +971,7 @@ export class Hierarchical_List {
 
         // Nu gaan we doorheen alle items en passen we de nummers aan indien nodig
         let lastNumbers: { [kring: string]: number } = {}; // Object to keep track of last numbers for each type
-        let itemsZonderNr: Array<string> = ["", "Bord", "Kring", "Splitsing"];
+        let itemsZonderNr: Array<string> = ["", "Bord", "Kring", "Splitsing", "Leiding"];
         
         for (let i = 0; i<this.length; i++) {
             if (!this.active[i]) continue;
@@ -1089,6 +1089,12 @@ export class Hierarchical_List {
                         this.tekenVerticaleLijnIndienKindVanKring(this.data[i] as Electro_Item,inSVG[elementCounter]);         
                         break;
 
+                    case "Leiding":
+                        // Een leiding tekent zichzelf verticaal (in lijn met de kring) wanneer ze rechtstreeks
+                        // onder een kring hangt, en tekent daarom zelf haar eigen verticale lijn/kabel.
+                        inSVG[elementCounter] = this.data[i].toSVG();
+                        break;
+
                     case "Container":
                         break;
 
@@ -1165,6 +1171,8 @@ export class Hierarchical_List {
                     outSVG.data += '<svg data-schema-item-id="' + inSVGItemIds[i]
                         + '" data-schema-anchor-y="' + inSVG[i].yup
                         + '" data-schema-end-x="' + (inSVG[i].xleft + inSVG[i].xright)
+                        + '" data-schema-top-x="' + inSVG[i].xleft
+                        + '" data-schema-top-y="0'
                         + '" data-schema-width="' + (inSVG[i].xleft + inSVG[i].xright)
                         + '" data-schema-height="' + (inSVG[i].yup + inSVG[i].ydown)
                         + '" x="' + xpos + '" y="' + (max_yup-inSVG[i].yup) + '">';
@@ -1221,6 +1229,8 @@ export class Hierarchical_List {
                     outSVG.data += '<svg data-schema-item-id="' + inSVGItemIds[i]
                         + '" data-schema-anchor-y="' + inSVG[i].yup
                         + '" data-schema-end-x="' + (inSVG[i].xleft + inSVG[i].xright)
+                        + '" data-schema-top-x="' + inSVG[i].xleft
+                        + '" data-schema-top-y="0'
                         + '" data-schema-width="' + (inSVG[i].xleft + inSVG[i].xright)
                         + '" data-schema-height="' + (inSVG[i].yup + inSVG[i].ydown)
                         + '" x="' + (outSVG.xleft-inSVG[i].xleft) + '" y="' + ypos + '">';
