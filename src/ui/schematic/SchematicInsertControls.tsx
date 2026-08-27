@@ -5,7 +5,7 @@ import type { SchemaStore } from "../../application/SchemaStore";
 import { useSchemaSnapshot } from "../useSchemaSnapshot";
 import { ui } from "../uiStyles";
 
-type InsertMode = "before" | "end";
+type InsertMode = "before" | "end" | "start";
 
 interface InsertTarget {
   readonly itemId: number;
@@ -148,7 +148,7 @@ export function SchematicInsertControls({
           const topY = Number(element.dataset.schemaTopY ?? 0);
           nextTargets.push({
             itemId,
-            mode: "end",
+            mode: isKring ? "start" : "end",
             ...(isKring
               ? diagramPoint(element, topX, topY, overlayElement, false)
               : diagramPoint(
@@ -190,9 +190,13 @@ export function SchematicInsertControls({
   function addItem(): void {
     if (!activeInsert) return;
     try {
+      const node = nodesById.get(activeInsert.itemId);
       const itemId = activeInsert.mode === "before"
         ? schemaStore.commands.insertItemBefore(activeInsert.itemId, activeInsert.selectedType)
         : schemaStore.commands.addItem(activeInsert.itemId, activeInsert.selectedType);
+      if (activeInsert.mode === "start" && node) {
+        schemaStore.commands.moveItem(itemId, { targetParentId: node.id, position: 0 });
+      }
       const document = schemaStore.getSnapshot().document;
       const ancestorItemIds: number[] = [];
       let parentId = document.getItem(itemId)?.parentId;
@@ -217,7 +221,11 @@ export function SchematicInsertControls({
       {targets.map((target) => {
         const node = nodesById.get(target.itemId);
         if (!node) return null;
-        const action = target.mode === "before" ? `vóór ${node.label} invoegen` : `na ${node.label} toevoegen`;
+        const action = target.mode === "before"
+          ? `vóór ${node.label} invoegen`
+          : target.mode === "start"
+            ? `in ${node.label} toevoegen`
+            : `na ${node.label} toevoegen`;
         return (
           <button
             key={`${target.mode}-${target.itemId}`}

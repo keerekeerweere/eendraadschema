@@ -94,9 +94,19 @@ describe("SchematicInsertControls", () => {
   });
 
   it("anchors a Kring add-child button at the top of its vertical spine", () => {
-    renderControls();
+    const { store, circuitId } = renderControls();
 
-    const button = screen.getByRole("button", { name: /na Kring A toevoegen/ });
+    const button = screen.getByRole("button", { name: /in Kring A toevoegen/ });
     expect(button.style.top).toBe("0px");
+
+    fireEvent.click(button);
+    const dialog = screen.getByRole("dialog", { name: "Onderdeel toevoegen" });
+    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Lichtpunt" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Toevoegen" }));
+
+    const children = store.getSnapshot().document.getChildren(circuitId);
+    expect(children).toHaveLength(2);
+    expect(children[0].type).toBe("Lichtpunt");
+    expect(children[1].type).toBe("Contactdoos");
   });
 });
