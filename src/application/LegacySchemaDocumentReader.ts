@@ -21,6 +21,9 @@ function getSummary(item: Electro_Item): HierarchyItemSummary {
     number: nonEmptyString(item.props.nr),
     address: nonEmptyString(item.props.adres),
     text: nonEmptyString(item.props.tekst),
+    protection: ["Kring", "Aansluiting"].includes(item.getType() ?? "")
+      ? nonEmptyString(item.props.bescherming)
+      : undefined,
   });
 }
 

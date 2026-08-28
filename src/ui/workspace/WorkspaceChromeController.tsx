@@ -39,20 +39,23 @@ export function WorkspaceChromeController({
       return;
     }
     const isDossier = activeTab === "dossier";
+    const isBoardLayout = activeTab === "board";
     const usesBoardHost = isDossier || activeTab === "board";
-    const usesEditingChrome = !isDossier;
 
     schematicElement?.style.setProperty("display", activeTab === "schema" ? "flex" : "none");
     situationElement?.style.setProperty("display", activeTab === "situation" ? "flex" : "none");
     boardWorkspaceElement?.classList.toggle("hidden", !usesBoardHost);
-    sidebarElement?.classList.toggle("hidden", !usesEditingChrome);
-    inspectorElement?.classList.toggle("hidden", !usesEditingChrome);
+    sidebarElement?.classList.toggle("hidden", isDossier || isBoardLayout);
+    inspectorElement?.classList.toggle("hidden", isDossier);
 
-    if (isDossier) {
+    if (isDossier || isBoardLayout) {
       boardWorkspaceElement?.style.setProperty("left", "0");
-      boardWorkspaceElement?.style.setProperty("right", "0");
     } else {
       boardWorkspaceElement?.style.removeProperty("left");
+    }
+    if (isDossier) {
+      boardWorkspaceElement?.style.setProperty("right", "0");
+    } else {
       boardWorkspaceElement?.style.removeProperty("right");
     }
   }, [

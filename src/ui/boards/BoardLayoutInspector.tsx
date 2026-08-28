@@ -71,7 +71,7 @@ export function BoardLayoutInspector({ schemaStore, editorStore }: BoardLayoutIn
           <input className={fieldClass} type="number" min="1" value={startModule} onChange={event => setStartModule(event.target.value)} />
         </label>
         <label className="grid gap-1 text-xs font-semibold text-neutral-600">
-          Breedte in modules
+          Modulebreedte
           <input className={fieldClass} type="number" min="1" value={moduleWidth} onChange={event => setModuleWidth(event.target.value)} />
         </label>
         <button type="button" className="rounded bg-blue-700 px-3 py-2 font-semibold text-white hover:bg-blue-800" onClick={save}>
