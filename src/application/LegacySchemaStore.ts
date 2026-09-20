@@ -18,7 +18,7 @@ import { validateAndMapLightPointChanges } from "./LightPointPropertyValidation"
 import { configuredItemTypes, type ConfiguredItemPropertyChanges } from "./ConfiguredItemProperties";
 import { freezeBoardLayout, type BoardLayout } from "../domain/BoardLayout";
 import { validateAndMapConfiguredItemChanges } from "./ConfiguredItemPropertyValidation";
-import { remainingOmschakelaarPorts } from "./Omschakelaar";
+import { isOmschakelaarPort, remainingOmschakelaarPorts } from "./Omschakelaar";
 import { LegacySchemaDocumentReader } from "./LegacySchemaDocumentReader";
 import { LegacySchemaPropertyReader } from "./LegacySchemaPropertyReader";
 import { validateSchemaDocument } from "./SchemaValidation";
@@ -372,6 +372,37 @@ export class LegacySchemaStore implements SchemaStore {
     }
     const legacyChanges = validateAndMapConfiguredItemChanges(type, changes);
     if (Object.keys(legacyChanges).length === 0) return;
+    const nextParentPort = legacyChanges.parent_port;
+    if (
+      type === "Omschakelaar"
+      && isOmschakelaarPort(nextParentPort)
+      && nextParentPort !== item.props.parent_port
+    ) {
+      const connectors = (this.structure.data as Electro_Item[]).filter(candidate => (
+        candidate.parent === item.id && candidate.getType() === "Omschakelaarpoort"
+      ));
+      if (connectors.length !== 2) {
+        throw new SchemaCommandError(
+          "INVALID_CHANGE",
+          "De omschakelaar heeft niet exact twee geldige aansluitpoorten.",
+        );
+      }
+      if (connectors.some(connector => connector.getNumChilds() > 0)) {
+        throw new SchemaCommandError(
+          "INVALID_CHANGE",
+          "Maak beide omschakelaarpoorten leeg voordat de invoerzijde wordt gewijzigd.",
+        );
+      }
+      this.commitTransaction(() => {
+        for (const [key, value] of Object.entries(legacyChanges)) item.props[key] = value;
+        item.normalizeProperties();
+        const portNames = remainingOmschakelaarPorts(nextParentPort);
+        connectors.forEach((connector, index) => {
+          connector.props.poort = portNames[index];
+        });
+      });
+      return;
+    }
     this.updateItem(itemId, legacyChanges);
   }
 

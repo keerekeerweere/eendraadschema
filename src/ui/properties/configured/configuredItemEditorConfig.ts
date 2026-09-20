@@ -129,6 +129,12 @@ export const configuredItemEditorConfigs: Readonly<Record<string, ConfiguredItem
     { key: "inCircuit", label: "In kring", advanced: true, visible: (properties) => properties.parentType === "Kring" },
     { key: "micro", label: "Micro-omvormer", advanced: true, visible: (properties) => properties.childCount <= 1 },
   ]),
+  Omschakelaar: { fields: [
+    { key: "poleCount", label: "Aantal polen" },
+    { key: "amperage", label: "Nominale stroom" },
+    { key: "parentPort", label: "Poort aan invoerzijde" },
+    { key: "address", label: "Adres/omschrijving" },
+  ] },
   Schakelaars: numbered(switchFields(true)),
   Transformator: numbered([{ key: "voltage", label: "Spanning" }]),
   "USB lader": numbered([{ key: "count", label: "Aantal" }]),

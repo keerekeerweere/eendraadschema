@@ -99,4 +99,66 @@ describe("Omschakelaar", () => {
     expectInvalidChange(() => store.commands.duplicateItem(firstPort.id));
     expectInvalidChange(() => store.commands.changeItemType(firstPort.id, "Kring"));
   });
+
+  it("exposes and updates the approved switch properties", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+
+    expect(store.getSnapshot().properties.getConfiguredItem(switchId)).toMatchObject({
+      type: "Omschakelaar",
+      values: {
+        poleCount: "4",
+        amperage: "63",
+        parentPort: "IN",
+        address: "",
+      },
+    });
+
+    store.commands.updateConfiguredItem(switchId, {
+      poleCount: "2",
+      amperage: "100",
+      parentPort: "OUT1",
+      address: "Bypass",
+    });
+
+    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values).toMatchObject({
+      poleCount: "2",
+      amperage: "100",
+      parentPort: "OUT1",
+      address: "Bypass",
+    });
+    expect(store.getSnapshot().document.getChildren(switchId).map(port => port.label)).toEqual([
+      "IN",
+      "OUT2",
+    ]);
+  });
+
+  it("rejects changing the parent-side port after a connector is wired", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    const firstPortId = store.getSnapshot().document.getChildren(switchId)[0].id;
+    store.commands.addItem(firstPortId, "Kring");
+    const revisionBefore = store.getSnapshot().revision;
+
+    expectInvalidChange(() => store.commands.updateConfiguredItem(switchId, {
+      parentPort: "OUT1",
+    }));
+    expect(store.getSnapshot().revision).toBe(revisionBefore);
+    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("IN");
+    expect(store.getSnapshot().document.getChildren(switchId).map(port => port.label)).toEqual([
+      "OUT1",
+      "OUT2",
+    ]);
+  });
+
+  it.each([
+    ["poleCount", "3"],
+    ["amperage", "50"],
+    ["parentPort", "GRID"],
+  ])("rejects unsupported %s values", (key, value) => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+
+    expectInvalidChange(() => store.commands.updateConfiguredItem(switchId, { [key]: value }));
+  });
 });
