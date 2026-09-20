@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 import { describe, expect, it } from "vitest";
 import { Hierarchical_List, PUBLIC_ELECTRO_ITEM_TYPES } from "../Hierarchical_List";
 import { LegacySchemaStore } from "../application/LegacySchemaStore";
@@ -221,5 +219,28 @@ describe("Omschakelaar", () => {
     });
     expect(restoredStore.getSnapshot().document.getChildren(switchId).map(port => port.id)).toEqual(portIds);
     expect(restoredStore.getSnapshot().document.getItem(branchId)?.parentId).toBe(portIds[1]);
+  });
+
+  it("renders a neutral three-position switch with all physical port labels", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    store.commands.updateConfiguredItem(switchId, { address: "Bypass <veilig>" });
+
+    const svg = store.getLegacyDocument().toSVG(0, "horizontal");
+    const document = new DOMParser().parseFromString(svg.data, "image/svg+xml");
+    const component = document.querySelector('[data-component="omschakelaar"]');
+
+    expect(component).not.toBeNull();
+    expect(component?.getAttribute("data-position")).toBe("neutral");
+    expect(component?.querySelectorAll("[data-switch-contact]")).toHaveLength(3);
+    expect(component?.querySelectorAll("[data-selector-arm]")).toHaveLength(2);
+    expect(component?.textContent).toContain("IN");
+    expect(component?.textContent).toContain("OUT1");
+    expect(component?.textContent).toContain("OUT2");
+    expect(component?.textContent).toContain("63A 4P");
+    expect(component?.textContent).toContain("Bypass <veilig>");
+    expect(svg.data).not.toContain("Bypass <veilig>");
+    expect(svg.xleft + svg.xright).toBeGreaterThan(0);
+    expect(svg.yup + svg.ydown).toBeGreaterThan(0);
   });
 });
