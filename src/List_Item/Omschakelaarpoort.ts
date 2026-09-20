@@ -22,12 +22,6 @@ export class Omschakelaarpoort extends Electro_Item {
   }
 
   toSVG(): SVGelement {
-    const svg = new SVGelement();
-    svg.xleft = 1;
-    svg.xright = 24;
-    svg.yup = 10;
-    svg.ydown = 10;
-    svg.data = '<line x1="1" y1="10" x2="25" y2="10" stroke="black" />';
-    return svg;
+    return new SVGelement();
   }
 }

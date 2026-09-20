@@ -35,6 +35,31 @@ function renderControls() {
   return { store, editorStore, circuitId, socketId };
 }
 
+function renderTransferSwitchControls() {
+  const structure = new Hierarchical_List();
+  const board = structure.addItem("Bord");
+  const store = new LegacySchemaStore(structure);
+  const circuitId = store.commands.addItem(board.id, "Kring");
+  const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+  const editorStore = new LocalEditorStore();
+  const previewElement = document.createElement("div");
+  previewElement.innerHTML = store.getLegacyDocument().toSVG(0, "horizontal").data;
+  const overlayElement = document.createElement("div");
+  document.body.append(previewElement, overlayElement);
+
+  render(
+    <SchematicInsertControls
+      schemaStore={store}
+      editorStore={editorStore}
+      previewElement={previewElement}
+      overlayElement={overlayElement}
+    />,
+    { container: overlayElement },
+  );
+
+  return { store, switchId };
+}
+
 describe("SchematicInsertControls", () => {
   it("adds an item at the end of a drawn branch", () => {
     const { store, editorStore, socketId } = renderControls();
@@ -61,5 +86,20 @@ describe("SchematicInsertControls", () => {
     expect(inserted.type).toBe("Lichtpunt");
     expect(store.getSnapshot().document.getItem(socketId)?.parentId).toBe(inserted.id);
     expect(editorStore.getSnapshot().selectedItemId).toBe(inserted.id);
+  });
+
+  it("adds circuits to the selected physical transfer-switch output", () => {
+    const { store, switchId } = renderTransferSwitchControls();
+    const ports = store.getSnapshot().document.getChildren(switchId);
+    const out1 = ports.find(port => port.label === "OUT1")!;
+    const out2 = ports.find(port => port.label === "OUT2")!;
+
+    fireEvent.click(screen.getByRole("button", { name: "Onderdeel na OUT1 toevoegen" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Toevoegen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Onderdeel na OUT2 toevoegen" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Toevoegen" }));
+
+    expect(store.getSnapshot().document.getChildren(out1.id)[0]?.type).toBe("Kring");
+    expect(store.getSnapshot().document.getChildren(out2.id)[0]?.type).toBe("Kring");
   });
 });

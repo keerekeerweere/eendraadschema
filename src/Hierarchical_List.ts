@@ -1095,6 +1095,11 @@ export class Hierarchical_List {
                         this.tekenVerticaleLijnIndienKindVanKring(this.data[i] as Electro_Item,inSVG[elementCounter]);         
                         break;
 
+                    case "Omschakelaar":
+                        // The transfer switch owns its incoming and outgoing conductors.
+                        inSVG[elementCounter] = this.data[i].toSVG();
+                        break;
+
                     case "Container":
                         break;
 

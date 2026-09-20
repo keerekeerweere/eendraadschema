@@ -134,22 +134,41 @@ describe("Omschakelaar", () => {
     ]);
   });
 
-  it("rejects changing the parent-side port after a connector is wired", () => {
+  it("preserves a wired connector subtree when it becomes the parent-side port", () => {
     const { store, circuitId } = createCircuitStore();
     const switchId = store.commands.addItem(circuitId, "Omschakelaar");
-    const firstPortId = store.getSnapshot().document.getChildren(switchId)[0].id;
-    store.commands.addItem(firstPortId, "Kring");
-    const revisionBefore = store.getSnapshot().revision;
+    const [out1Before, out2Before] = store.getSnapshot().document.getChildren(switchId);
+    const branchId = store.commands.addItem(out1Before.id, "Kring");
 
-    expectInvalidChange(() => store.commands.updateConfiguredItem(switchId, {
+    store.commands.updateConfiguredItem(switchId, {
       parentPort: "OUT1",
-    }));
-    expect(store.getSnapshot().revision).toBe(revisionBefore);
-    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("IN");
-    expect(store.getSnapshot().document.getChildren(switchId).map(port => port.label)).toEqual([
-      "OUT1",
-      "OUT2",
+    });
+
+    let connectors = store.getSnapshot().document.getChildren(switchId);
+    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("OUT1");
+    expect(connectors.map(port => [port.id, port.label])).toEqual([
+      [out1Before.id, "IN"],
+      [out2Before.id, "OUT2"],
     ]);
+    expect(store.getSnapshot().document.getChildren(out1Before.id).map(child => child.id)).toEqual([branchId]);
+
+    store.commands.undo();
+    connectors = store.getSnapshot().document.getChildren(switchId);
+    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("IN");
+    expect(connectors.map(port => [port.id, port.label])).toEqual([
+      [out1Before.id, "OUT1"],
+      [out2Before.id, "OUT2"],
+    ]);
+    expect(store.getSnapshot().document.getChildren(out1Before.id).map(child => child.id)).toEqual([branchId]);
+
+    store.commands.redo();
+    connectors = store.getSnapshot().document.getChildren(switchId);
+    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("OUT1");
+    expect(connectors.map(port => [port.id, port.label])).toEqual([
+      [out1Before.id, "IN"],
+      [out2Before.id, "OUT2"],
+    ]);
+    expect(store.getSnapshot().document.getChildren(out1Before.id).map(child => child.id)).toEqual([branchId]);
   });
 
   it.each([
@@ -221,7 +240,7 @@ describe("Omschakelaar", () => {
     expect(restoredStore.getSnapshot().document.getItem(branchId)?.parentId).toBe(portIds[1]);
   });
 
-  it("renders a neutral three-position switch with all physical port labels", () => {
+  it("renders a vertically oriented neutral switch on a circuit", () => {
     const { store, circuitId } = createCircuitStore();
     const switchId = store.commands.addItem(circuitId, "Omschakelaar");
     store.commands.updateConfiguredItem(switchId, { address: "Bypass <veilig>" });
@@ -232,8 +251,19 @@ describe("Omschakelaar", () => {
 
     expect(component).not.toBeNull();
     expect(component?.getAttribute("data-position")).toBe("neutral");
+    expect(component?.getAttribute("data-orientation")).toBe("vertical");
     expect(component?.querySelectorAll("[data-switch-contact]")).toHaveLength(3);
-    expect(component?.querySelectorAll("[data-selector-arm]")).toHaveLength(2);
+    expect(component?.querySelectorAll("[data-selector-arm]")).toHaveLength(1);
+    const inputContact = component?.querySelector('[data-switch-contact="IN"]');
+    const inputConductor = component?.querySelector('[data-input-conductor="IN"]');
+    const rating = component?.querySelector('[data-switch-rating]');
+    const address = component?.querySelector('[data-switch-address]');
+    expect(inputConductor?.getAttribute("x1")).toBe(inputContact?.getAttribute("cx"));
+    expect(inputConductor?.getAttribute("x2")).toBe(inputContact?.getAttribute("cx"));
+    expect(Number(rating?.getAttribute("x"))).toBeGreaterThan(Number(inputConductor?.getAttribute("x1")));
+    expect(Number(address?.getAttribute("x"))).toBeGreaterThan(Number(inputConductor?.getAttribute("x1")));
+    expect(rating?.getAttribute("text-anchor")).toBe("start");
+    expect(address?.getAttribute("text-anchor")).toBe("start");
     expect(component?.textContent).toContain("IN");
     expect(component?.textContent).toContain("OUT1");
     expect(component?.textContent).toContain("OUT2");
@@ -242,6 +272,64 @@ describe("Omschakelaar", () => {
     expect(svg.data).not.toContain("Bypass <veilig>");
     expect(svg.xleft + svg.xright).toBeGreaterThan(0);
     expect(svg.yup + svg.ydown).toBeGreaterThan(0);
+  });
+
+  it("renders no independent conductor for structural port nodes", () => {
+    const structure = new Hierarchical_List();
+    const port = structure.createItem("Omschakelaarpoort");
+
+    const svg = port.toSVG();
+
+    expect(svg.data).toBe("");
+    expect(svg.xleft + svg.xright).toBe(0);
+    expect(svg.yup + svg.ydown).toBe(0);
+  });
+
+  it("keeps both wired outputs continuous with no duplicate port segments", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    for (const port of store.getSnapshot().document.getChildren(switchId)) {
+      store.commands.addItem(port.id, "Kring");
+    }
+
+    const document = new DOMParser().parseFromString(
+      store.getLegacyDocument().toSVG(0, "horizontal").data,
+      "image/svg+xml",
+    );
+    const component = document.querySelector('[data-component="omschakelaar"]')!;
+
+    expect(component.querySelectorAll('[data-port-placeholder]')).toHaveLength(0);
+    for (const port of ["OUT1", "OUT2"]) {
+      const contact = component.querySelector(`[data-switch-contact="${port}"]`)!;
+      const conductor = component.querySelector(`[data-output-conductor="${port}"]`)!;
+      const branch = component.querySelector(`[data-branch-origin="${port}"]`)!;
+      const anchor = component.querySelector(`[data-explicit-port-anchor="${port}"]`)!;
+      expect(conductor.getAttribute("x1")).toBe(contact.getAttribute("cx"));
+      expect(conductor.getAttribute("y1")).toBe(contact.getAttribute("cy"));
+      expect(branch.getAttribute("data-x")).toBe(conductor.getAttribute("x2"));
+      expect(branch.getAttribute("data-y")).toBe(conductor.getAttribute("y2"));
+      expect(anchor.getAttribute("data-schema-end-x")).toBe(conductor.getAttribute("x2"));
+      expect(anchor.getAttribute("data-schema-anchor-y")).toBe(conductor.getAttribute("y2"));
+    }
+  });
+
+  it("renders horizontal geometry when the incoming conductor is not a circuit branch", () => {
+    const structure = new Hierarchical_List();
+    const connection = structure.addItem("Aansluiting");
+    const store = new LegacySchemaStore(structure);
+    const switchId = store.commands.addItem(connection.id, "Omschakelaar");
+    const document = new DOMParser().parseFromString(
+      store.getLegacyDocument().toSVG(0, "horizontal").data,
+      "image/svg+xml",
+    );
+    const component = document.querySelector('[data-component="omschakelaar"]')!;
+    const input = component.querySelector('[data-switch-contact="IN"]')!;
+    const out1 = component.querySelector('[data-switch-contact="OUT1"]')!;
+    const out2 = component.querySelector('[data-switch-contact="OUT2"]')!;
+
+    expect(component.getAttribute("data-orientation")).toBe("horizontal");
+    expect(Number(input.getAttribute("cx"))).toBeLessThan(Number(out1.getAttribute("cx")));
+    expect(Number(out1.getAttribute("cy"))).toBeLessThan(Number(out2.getAttribute("cy")));
   });
 
   it("creates an unprotected connection circuit below a physical port", () => {

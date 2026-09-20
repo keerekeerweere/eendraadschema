@@ -387,28 +387,30 @@ export class LegacySchemaStore implements SchemaStore {
       && isOmschakelaarPort(nextParentPort)
       && nextParentPort !== item.props.parent_port
     ) {
-      const connectors = (this.structure.data as Electro_Item[]).filter(candidate => (
-        candidate.parent === item.id && candidate.getType() === "Omschakelaarpoort"
+      const currentParentPort = item.props.parent_port;
+      const connectors = (this.structure.data as Electro_Item[]).filter((candidate, index) => (
+        this.structure.active[index]
+        && candidate.parent === item.id
+        && candidate.getType() === "Omschakelaarpoort"
       ));
-      if (connectors.length !== 2) {
+      const expectedConnectorPorts = isOmschakelaarPort(currentParentPort)
+        ? remainingOmschakelaarPorts(currentParentPort)
+        : [];
+      const actualConnectorPorts = connectors.map(connector => connector.props.poort);
+      const hasValidTopology = connectors.length === 2
+        && new Set(actualConnectorPorts).size === 2
+        && expectedConnectorPorts.every(port => actualConnectorPorts.includes(port));
+      const connectorBecomingParent = connectors.find(connector => connector.props.poort === nextParentPort);
+      if (!hasValidTopology || connectorBecomingParent === undefined) {
         throw new SchemaCommandError(
           "INVALID_CHANGE",
           "De omschakelaar heeft niet exact twee geldige aansluitpoorten.",
         );
       }
-      if (connectors.some(connector => connector.getNumChilds() > 0)) {
-        throw new SchemaCommandError(
-          "INVALID_CHANGE",
-          "Maak beide omschakelaarpoorten leeg voordat de invoerzijde wordt gewijzigd.",
-        );
-      }
       this.commitTransaction(() => {
         for (const [key, value] of Object.entries(legacyChanges)) item.props[key] = value;
         item.normalizeProperties();
-        const portNames = remainingOmschakelaarPorts(nextParentPort);
-        connectors.forEach((connector, index) => {
-          connector.props.poort = portNames[index];
-        });
+        connectorBecomingParent.props.poort = currentParentPort;
       });
       return;
     }
