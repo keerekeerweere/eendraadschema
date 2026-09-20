@@ -83,6 +83,7 @@ export const configuredItemEditorConfigs: Readonly<Record<string, ConfiguredItem
   Bord: { fields: [
     { key: "name", label: "Naam" },
     { key: "grounded", label: "Geaard" },
+    { key: "busbarExtensionRight", label: "Balk rechts verlengen (px)" },
   ] },
   Domotica: numbered([{ key: "text", label: "Tekst (nieuwe lijn = |)" }]),
   "Domotica module (verticaal)": { fields: [
@@ -129,6 +130,12 @@ export const configuredItemEditorConfigs: Readonly<Record<string, ConfiguredItem
     { key: "inCircuit", label: "In kring", advanced: true, visible: (properties) => properties.parentType === "Kring" },
     { key: "micro", label: "Micro-omvormer", advanced: true, visible: (properties) => properties.childCount <= 1 },
   ]),
+  Omschakelaar: { fields: [
+    { key: "poleCount", label: "Aantal polen" },
+    { key: "amperage", label: "Nominale stroom" },
+    { key: "parentPort", label: "Inkomende leiding op poort" },
+    { key: "address", label: "Adres/omschrijving" },
+  ] },
   Schakelaars: numbered(switchFields(true)),
   Transformator: numbered([{ key: "voltage", label: "Spanning" }]),
   "USB lader": numbered([{ key: "count", label: "Aantal" }]),

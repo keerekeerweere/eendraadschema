@@ -19,7 +19,7 @@ export interface HierarchyItemSummary {
   readonly number?: string;
   readonly address?: string;
   readonly text?: string;
-  readonly protection?: string;
+  readonly connectionPort?: string;
 }
 
 export interface HierarchyViewNode {

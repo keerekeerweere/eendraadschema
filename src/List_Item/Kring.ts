@@ -70,6 +70,7 @@ export class Kring extends Electro_Item {
                 this.props.kabel_is_aanwezig = true;         // wel een kabel na bord
                 break;
             case "Splitsing":
+            case "Omschakelaarpoort":
                 this.props.bescherming = "geen"; // geen zekering per default na splitsing
                 this.props.naam = "";    // We geven de kring geen naam
                 this.props.kabel_is_aanwezig = false; // geen kabel per default na splitsing
@@ -93,7 +94,7 @@ export class Kring extends Electro_Item {
     }
 
     allowedChilds() : Array<string> { // returns an array with the type-names of allowed childs
-        return ["", "Aansluiting", "Bord", "Domotica", "Domotica module (verticaal)", "Domotica gestuurde verbruiker", "Kring", "Leiding", "Meerdere verbruikers", "Splitsing", "---", "Batterij", "Bel", "Boiler", "Contactdoos", "Diepvriezer", "Droogkast", "Drukknop", "Elektriciteitsmeter", "Elektrische oven", "EV lader", "Ketel", "Koelkast", "Kookfornuis", "Lichtcircuit", "Lichtpunt", "Media", "Microgolfoven", "Motor", "Omvormer", "Overspanningsbeveiliging", "Schakelaars", "Stoomoven", "Transformator", "USB lader", "Vaatwasmachine", "Ventilator", "Verlenging", "Verwarmingstoestel", "Verbruiker", "Vrije tekst", "Warmtepomp/airco", "Wasmachine", "Zekering/differentieel", "Zonnepaneel", "---", "Aansluitpunt", "Aftakdoos", "Zeldzame symbolen"];
+        return ["", "Aansluiting", "Bord", "Domotica", "Domotica module (verticaal)", "Domotica gestuurde verbruiker", "Kring", "Meerdere verbruikers", "Splitsing", "Omschakelaar", "---", "Batterij", "Bel", "Boiler", "Contactdoos", "Diepvriezer", "Droogkast", "Drukknop", "Elektriciteitsmeter", "Elektrische oven", "EV lader", "Ketel", "Koelkast", "Kookfornuis", "Lichtcircuit", "Lichtpunt", "Media", "Microgolfoven", "Motor", "Omvormer", "Overspanningsbeveiliging", "Schakelaars", "Stoomoven", "Transformator", "USB lader", "Vaatwasmachine", "Ventilator", "Verlenging", "Verwarmingstoestel", "Verbruiker", "Vrije tekst", "Warmtepomp/airco", "Wasmachine", "Zekering/differentieel", "Zonnepaneel", "---", "Aansluitpunt", "Aftakdoos", "Zeldzame symbolen"];
     }
 
     getMaxNumChilds(): number {
@@ -211,7 +212,7 @@ export class Kring extends Electro_Item {
         if (this.props.kabel_is_aanwezig) { // Kabel aanwezig
 
             // Kabel tekenen en naam van de kabel ernaast zetten
-            mySVG.data += '<line x1="' + mySVG.xleft + '" x2="' + mySVG.xleft + '" y1="' + mySVG.yup + '" y2="' + (mySVG.yup+100) + '" stroke="black" />'
+            mySVG.data += '<line x1="' + mySVG.xleft + '" x2="' + mySVG.xleft + '" y1="' + mySVG.yup + '" y2="' + (mySVG.yup+100) + '" stroke="black" stroke-linecap="round" />'
                        +  "<text x=\"" + (mySVG.xleft+15) + "\" y=\"" + (mySVG.yup+80) + "\""
                        +  " transform=\"rotate(-90 " + (mySVG.xleft+15) + "," + (mySVG.yup+80) + ")" 
                        +  "\" style=\"text-anchor:start\" font-family=\"Arial, Helvetica, sans-serif\" font-size=\"10\">" 
@@ -593,7 +594,7 @@ export class Kring extends Electro_Item {
 
 
         // Lijntje onder de zekering
-        mySVG.data += '<line x1="' + mySVG.xleft + '" x2="' + mySVG.xleft + '" y1="' + mySVG.yup + '" y2="' + (mySVG.yup+15) + '" stroke="black" />';
+        mySVG.data += '<line x1="' + mySVG.xleft + '" x2="' + mySVG.xleft + '" y1="' + mySVG.yup + '" y2="' + (mySVG.yup+15) + '" stroke="black" stroke-linecap="round" />';
         mySVG.yup  += 15;
 
         // Als er helemaal niets getekend is voorzien we nog steeds een lege box

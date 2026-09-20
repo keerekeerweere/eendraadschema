@@ -1,3 +1,9 @@
+import {
+  OMSCHAKELAAR_POLES,
+  OMSCHAKELAAR_PORTS,
+  OMSCHAKELAAR_RATINGS,
+} from "./Omschakelaar";
+
 export type ConfiguredPropertyValue = string | boolean;
 
 export interface ConfiguredPropertyDefinition {
@@ -87,6 +93,7 @@ export const CONFIGURED_ITEM_PROPERTY_SCHEMAS: Readonly<Record<string, Configure
   Bord: schema({
     name: { legacyKey: "naam", kind: "text", defaultValue: "" },
     grounded: { legacyKey: "is_geaard", kind: "boolean", defaultValue: false },
+    busbarExtensionRight: { legacyKey: "verlenging_rechts", kind: "select", options: ["0", "20", "40", "60", "80", "100", "150", "200", "300"], defaultValue: "0" },
   }),
   Domotica: numbered({
     text: { legacyKey: "tekst", kind: "text", defaultValue: "Domotica" },
@@ -140,6 +147,12 @@ export const CONFIGURED_ITEM_PROPERTY_SCHEMAS: Readonly<Record<string, Configure
     inCircuit: { legacyKey: "inkring", kind: "boolean", defaultValue: false },
     micro: { legacyKey: "micro", kind: "boolean", defaultValue: false },
     text: { legacyKey: "tekst", kind: "text", defaultValue: "" },
+  }),
+  Omschakelaar: schema({
+    poleCount: { legacyKey: "aantal_polen", kind: "select", options: OMSCHAKELAAR_POLES, defaultValue: "4" },
+    amperage: { legacyKey: "amperage", kind: "select", options: OMSCHAKELAAR_RATINGS, defaultValue: "63" },
+    parentPort: { legacyKey: "parent_port", kind: "select", options: OMSCHAKELAAR_PORTS, defaultValue: "IN" },
+    address: { legacyKey: "adres", kind: "text", defaultValue: "" },
   }),
   Schakelaars: numbered({
     switchType: { legacyKey: "type_schakelaar", kind: "select", options: ["enkelpolig", "dubbelpolig", "driepolig", "dubbelaansteking", "wissel_enkel", "wissel_dubbel", "kruis_enkel", "---", "contact", "dimschakelaar", "dimschakelaar wissel", "bewegingsschakelaar", "schemerschakelaar", "teleruptor", "relais", "dimmer", "tijdschakelaar", "minuterie", "thermostaat", "rolluikschakelaar", "magneetcontact"], defaultValue: "enkelpolig" },

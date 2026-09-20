@@ -20,10 +20,14 @@ function getSummary(item: Electro_Item): HierarchyItemSummary {
     name: nonEmptyString(item.props.naam),
     number: nonEmptyString(item.props.nr),
     address: nonEmptyString(item.props.adres),
-    text: nonEmptyString(item.props.tekst),
-    protection: ["Kring", "Aansluiting"].includes(item.getType() ?? "")
-      ? nonEmptyString(item.props.bescherming)
-      : undefined,
+    text: nonEmptyString(item.getType() === "Omschakelaarpoort" ? item.props.poort : item.props.tekst),
+    connectionPort: nonEmptyString(
+      item.getType() === "Omschakelaar"
+        ? item.props.parent_port
+        : item.getType() === "Omschakelaarpoort"
+          ? item.props.poort
+          : undefined,
+    ),
   });
 }
 
@@ -33,6 +37,7 @@ const labelFormatters: Readonly<Record<string, LabelFormatter>> = Object.freeze(
   "": () => "Nieuw element",
   Bord: (type, summary) => summary.name ?? type,
   Kring: (type, summary) => summary.name ? `${type} ${summary.name}` : type,
+  Omschakelaarpoort: (_type, summary) => summary.text ?? "Omschakelaarpoort",
 });
 
 function getLabel(type: string, summary: HierarchyItemSummary): string {
@@ -212,7 +217,8 @@ export class LegacySchemaDocumentReader implements SchemaDocumentReader {
     const summary = getSummary(item);
     const role = getRole(item);
     const isEditableItem = role === "item";
-    const insertBeforeTypes = isEditableItem
+    const isProtectedConnector = item.getType() === "Omschakelaarpoort";
+    const insertBeforeTypes = isEditableItem && !isProtectedConnector
       ? allowedInsertBeforeTypes(item.sourcelist, item, isBoardRoot)
       : Object.freeze([]);
     return Object.freeze({
@@ -220,20 +226,20 @@ export class LegacySchemaDocumentReader implements SchemaDocumentReader {
       parentId: item.parent === 0 ? null : item.parent,
       type: item.getType() ?? "",
       label: getLabel(item.getType() ?? "", summary),
-      description: getDescription(summary),
+      description: item.getType() === "Omschakelaarpoort" ? undefined : getDescription(summary),
       childIds: Object.freeze([...childIds]),
       summary,
       role,
       capabilities: Object.freeze({
         canAddChild: isEditableItem && item.checkInsertChild(),
         canInsertBefore: insertBeforeTypes.length > 0,
-        canDelete: isEditableItem && !isBoardRoot,
-        canDuplicate: isEditableItem && !isBoardRoot && item.checkInsertSibling(),
-        canMove: isEditableItem && !isBoardRoot,
-        canExpand: isEditableItem && item.isExpandable(),
+        canDelete: isEditableItem && !isProtectedConnector && !isBoardRoot,
+        canDuplicate: isEditableItem && !isProtectedConnector && !isBoardRoot && item.checkInsertSibling(),
+        canMove: isEditableItem && !isProtectedConnector && !isBoardRoot,
+        canExpand: isEditableItem && !isProtectedConnector && item.isExpandable(),
         allowedChildTypes: isEditableItem ? allowedChildTypes(item) : Object.freeze([]),
         allowedInsertBeforeTypes: insertBeforeTypes,
-        allowedItemTypes: isEditableItem ? Object.freeze(isBoardRoot
+        allowedItemTypes: isEditableItem && !isProtectedConnector && item.getType() !== "Omschakelaar" ? Object.freeze(isBoardRoot
           ? [item.getType()]
           : Array.from(new Set([
               item.getType(),

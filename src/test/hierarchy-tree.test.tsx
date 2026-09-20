@@ -116,6 +116,25 @@ describe("HierarchyTree", () => {
       .filter((item) => item.type === "Contactdoos")).toHaveLength(2);
   });
 
+  it("shows fixed omschakelaar ports without structural controls", () => {
+    const { schemaStore, editorStore, board, circuit } = createHierarchy();
+    const switchId = schemaStore.commands.addItem(circuit.id, "Omschakelaar");
+    const port = schemaStore.getSnapshot().document.getChildren(switchId)[0];
+    editorStore.commands.expandItem(board.id);
+    editorStore.commands.expandItem(circuit.id);
+    editorStore.commands.expandItem(switchId);
+    render(<HierarchyTree schemaStore={schemaStore} editorStore={editorStore} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "OUT1" }));
+
+    expect(screen.queryByLabelText("Type van OUT1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "OUT1 verwijderen" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "OUT1 dupliceren" })).not.toBeInTheDocument();
+    const addSelect = screen.getByLabelText("Onderdeel toevoegen onder OUT1");
+    expect(Array.from(addSelect.querySelectorAll("option"), option => option.value)).toContain("Kring");
+    expect(schemaStore.getSnapshot().document.getItem(port.id)?.capabilities.canDelete).toBe(false);
+  });
+
   it("changes types and expands composite items through dedicated controls", () => {
     const { schemaStore, editorStore, board, circuit, socket } = createHierarchy();
     editorStore.commands.expandItem(board.id);

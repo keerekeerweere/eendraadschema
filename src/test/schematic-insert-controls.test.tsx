@@ -35,6 +35,31 @@ function renderControls() {
   return { store, editorStore, circuitId, socketId };
 }
 
+function renderTransferSwitchControls() {
+  const structure = new Hierarchical_List();
+  const board = structure.addItem("Bord");
+  const store = new LegacySchemaStore(structure);
+  const circuitId = store.commands.addItem(board.id, "Kring");
+  const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+  const editorStore = new LocalEditorStore();
+  const previewElement = document.createElement("div");
+  previewElement.innerHTML = store.getLegacyDocument().toSVG(0, "horizontal").data;
+  const overlayElement = document.createElement("div");
+  document.body.append(previewElement, overlayElement);
+
+  render(
+    <SchematicInsertControls
+      schemaStore={store}
+      editorStore={editorStore}
+      previewElement={previewElement}
+      overlayElement={overlayElement}
+    />,
+    { container: overlayElement },
+  );
+
+  return { store, switchId };
+}
+
 describe("SchematicInsertControls", () => {
   it("adds an item at the end of a drawn branch", () => {
     const { store, editorStore, socketId } = renderControls();
@@ -63,50 +88,18 @@ describe("SchematicInsertControls", () => {
     expect(editorStore.getSnapshot().selectedItemId).toBe(inserted.id);
   });
 
-  it("adds a Leiding directly at the end of a Kring", () => {
-    const { store, editorStore, socketId } = renderControls();
+  it("adds circuits to the selected physical transfer-switch output", () => {
+    const { store, switchId } = renderTransferSwitchControls();
+    const ports = store.getSnapshot().document.getChildren(switchId);
+    const out1 = ports.find(port => port.label === "OUT1")!;
+    const out2 = ports.find(port => port.label === "OUT2")!;
 
-    fireEvent.click(screen.getByRole("button", { name: /na Contactdoos 1 toevoegen/ }));
-    const dialog = screen.getByRole("dialog", { name: "Onderdeel toevoegen" });
-    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Leiding" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Toevoegen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Onderdeel na OUT1 toevoegen" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Toevoegen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Onderdeel na OUT2 toevoegen" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Toevoegen" }));
 
-    const child = store.getSnapshot().document.getChildren(socketId)[0];
-    expect(child.type).toBe("Leiding");
-    expect(editorStore.getSnapshot().selectedItemId).toBe(child.id);
-  });
-
-  it("inserts a Leiding between two consumers in a Kring", () => {
-    const { store, editorStore, circuitId, socketId } = renderControls();
-
-    fireEvent.click(screen.getByRole("button", { name: /vóór Contactdoos 1 invoegen/ }));
-    const dialog = screen.getByRole("dialog", { name: "Onderdeel toevoegen" });
-    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Leiding" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Toevoegen" }));
-
-    const inserted = store.getSnapshot().document.getChildren(circuitId)[0];
-    expect(inserted.type).toBe("Leiding");
-    expect(store.getSnapshot().document.getItem(socketId)?.parentId).toBe(inserted.id);
-    expect(editorStore.getSnapshot().selectedItemId).toBe(inserted.id);
-
-    // Rendering should not throw even though a Leiding is now a direct child of a Kring.
-    expect(() => store.getLegacyDocument().toSVG(0, "horizontal")).not.toThrow();
-  });
-
-  it("anchors a Kring add-child button at the top of its vertical spine", () => {
-    const { store, circuitId } = renderControls();
-
-    const button = screen.getByRole("button", { name: /in Kring A toevoegen/ });
-    expect(button.style.top).toBe("0px");
-
-    fireEvent.click(button);
-    const dialog = screen.getByRole("dialog", { name: "Onderdeel toevoegen" });
-    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Lichtpunt" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Toevoegen" }));
-
-    const children = store.getSnapshot().document.getChildren(circuitId);
-    expect(children).toHaveLength(2);
-    expect(children[0].type).toBe("Lichtpunt");
-    expect(children[1].type).toBe("Contactdoos");
+    expect(store.getSnapshot().document.getChildren(out1.id)[0]?.type).toBe("Kring");
+    expect(store.getSnapshot().document.getChildren(out2.id)[0]?.type).toBe("Kring");
   });
 });

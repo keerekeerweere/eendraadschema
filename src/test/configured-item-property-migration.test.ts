@@ -16,6 +16,12 @@ function createDocument(type: string): { structure: Hierarchical_List; itemId: n
   if (type === "Bord") return { structure, itemId: board.id };
   const circuit = structure.createItem("Kring");
   structure.insertChildAfterId(circuit, board.id);
+  if (type === "Omschakelaar") {
+    const store = new LegacySchemaStore(structure);
+    const itemId = store.commands.addItem(circuit.id, type);
+    structure.reNumber(false);
+    return { structure, itemId };
+  }
   const item = structure.createItem(type);
   structure.insertChildAfterId(item, circuit.id);
   structure.reNumber(false);
