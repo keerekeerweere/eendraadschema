@@ -502,40 +502,17 @@ Expected: exit 0; only the repository's existing legacy non-module warnings rema
 Run: `git diff --check && git status --short`
 Expected: no whitespace errors; the three user screenshots and `.superpowers/` remain untracked.
 
-### Task 14: Fixed port roles and label-collision fix
+### Task 14: Fixed slots, incoming wire on any slot, and label-collision fix
 
 **Files:**
 - Modify: `src/List_Item/Omschakelaar.ts`
-- Modify: `src/List_Item/Omschakelaarpoort.ts`
-- Modify: `src/application/Omschakelaar.ts`
-- Modify: `src/application/LegacySchemaStore.ts`
-- Modify: `src/application/ConfiguredItemProperties.ts`
-- Modify: `src/application/LegacySchemaDocumentReader.ts`
-- Modify: `src/application/SchemaValidation.ts`
-- Modify: `src/ui/properties/configured/configuredItemEditorConfig.ts`
-- Modify: `src/test/omschakelaar.test.ts`, `src/test/configured-item-properties.test.tsx`, `src/test/configured-item-property-migration.test.ts`
+- Modify: `src/test/omschakelaar.test.ts`
 
-Field feedback after Tasks 11–13 shipped: reassigning which port sat on the
-parent side via `parent_port` (a connector-identity swap) was confusing —
-the same physical drawing position could show different port text depending
-on the dropdown. `parent_port` and the swap mechanism (Task 11) are removed
-entirely. `IN` is now always the switch's structural parent connector
-(wherever it was inserted, centered between the two alternatives in both
-orientations); `OUT1`/`OUT2` are always the first/second `Omschakelaarpoort`
-child, in that fixed order, regardless of which one is wired. Separately,
-the rating/pole label (`63A 4P`) was overlapping the `IN`/`OUT` port label
-in vertical orientation; it now renders one text line below the port label
-instead of sharing its row.
+Two field problems after Tasks 11-13:
 
-Verified with: `npm test -- --run`, `npm run typecheck:test`, `npm run build`.
+1. The rating/pole label (`63A 4P`) overlapped the `IN`/`OUT` port label in vertical orientation; it now renders one text line below the port label.
+2. `parent_port` used to relabel the drawing (the same position could show different port text, and `IN` could end up on a side branch). The renderer is now slot-based: `OUT1` is always left/top, `IN` always middle, `OUT2` always right/bottom, and `parent_port` only chooses which slot the incoming wire attaches to (the maintainer's Sontheimer UL040 / Victron case: the existing net wire enters `OUT1`, `IN` continues up to the household board, `OUT2` goes via an automaat to the inverter).
 
-**Post-ship clarification:** this task was briefly reverted, then re-applied, in
-the same session. The maintainer's actual scenario (Sontheimer UL040 Victron
-bypass, `docs/Screenshot From 2026-09-20 18-57-58.png`) is: the switch is
-added under an existing "household board" item (which automatically becomes
-`IN`, no configuration needed), an existing "net" circuit is added/moved as a
-normal child under the `OUT1` connector row, and an automaat+inverter chain
-is added under `OUT2`. That is plain child-addition on a fixed-role switch —
-it does not need any parent-side reassignment. The earlier back-and-forth
-was a miscommunication about how to attach a branch to a specific port
-(use the connector's own "+", not a property), not a missing capability.
+Two detours to remember: removing `parent_port` entirely (fixed roles) was tried and reverted because the incoming wire must be able to attach to `OUT1`; and the maintainer's live document was inspected read-only through the MCP bridge (`Bord -> Kring A -> Omschakelaar`, both connectors empty) to confirm the real structure before implementing.
+
+Verified with: `npm test -- --run`, `npm run typecheck:test`, `npm run build`, plus rendered SVG screenshots for every `parent_port` in both orientations.

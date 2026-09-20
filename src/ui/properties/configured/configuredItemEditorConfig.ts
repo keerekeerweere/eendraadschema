@@ -132,6 +132,7 @@ export const configuredItemEditorConfigs: Readonly<Record<string, ConfiguredItem
   Omschakelaar: { fields: [
     { key: "poleCount", label: "Aantal polen" },
     { key: "amperage", label: "Nominale stroom" },
+    { key: "parentPort", label: "Poort aan invoerzijde" },
     { key: "address", label: "Adres/omschrijving" },
   ] },
   Schakelaars: numbered(switchFields(true)),

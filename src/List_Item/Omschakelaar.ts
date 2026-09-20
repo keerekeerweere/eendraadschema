@@ -1,10 +1,43 @@
 import { Electro_Item } from "./Electro_Item";
 import {
+  isOmschakelaarPort,
   OMSCHAKELAAR_POLES,
   OMSCHAKELAAR_RATINGS,
 } from "../application/Omschakelaar";
+import type { OmschakelaarPort } from "../application/Omschakelaar";
 import { htmlspecialchars, svgTextWidth } from "../general";
 import { SVGelement } from "../SVGelement";
+
+/**
+ * The three ports always sit in the same slots, whatever the wiring:
+ * left/top = OUT1, middle = IN, right/bottom = OUT2. `parent_port` only
+ * chooses which slot the incoming wire (the switch's tree parent) attaches
+ * to; the other two slots are the two connector items.
+ */
+const SLOT_ORDER: readonly OmschakelaarPort[] = ["OUT1", "IN", "OUT2"];
+
+interface Slot {
+  readonly port: OmschakelaarPort;
+  readonly isParent: boolean;
+  readonly connector: { readonly id: number } | undefined;
+  readonly svg: SVGelement;
+}
+
+interface Point { x: number; y: number }
+
+interface Layout {
+  readonly orientation: "horizontal" | "vertical";
+  readonly parentPort: OmschakelaarPort;
+  readonly contacts: Record<OmschakelaarPort, Point>;
+  readonly ends: Record<OmschakelaarPort, Point>;
+  readonly parentConductor: { from: Point; to: Point };
+  readonly arm: { from: Point; to: Point };
+  readonly portLabels: Record<OmschakelaarPort, Point & { anchor: "start" | "middle" }>;
+  readonly rating: Point;
+  readonly address: Point;
+  readonly metadataAnchor: "start" | "middle";
+  readonly incomingY: number;
+}
 
 export class Omschakelaar extends Electro_Item {
   resetProps(): void {
@@ -12,6 +45,7 @@ export class Omschakelaar extends Electro_Item {
     this.props.type = "Omschakelaar";
     this.props.aantal_polen = "4";
     this.props.amperage = "63";
+    this.props.parent_port = "IN";
     this.props.adres = "";
   }
 
@@ -26,11 +60,13 @@ export class Omschakelaar extends Electro_Item {
   overrideKeys(): void {
     if (!OMSCHAKELAAR_POLES.includes(this.props.aantal_polen)) this.props.aantal_polen = "4";
     if (!OMSCHAKELAAR_RATINGS.includes(this.props.amperage)) this.props.amperage = "63";
+    if (!isOmschakelaarPort(this.props.parent_port)) this.props.parent_port = "IN";
     if (typeof this.props.adres !== "string") this.props.adres = "";
   }
 
   toSVG(): SVGelement {
-    const branches = this.getRenderBranches();
+    const parentPort: OmschakelaarPort = isOmschakelaarPort(this.props.parent_port) ? this.props.parent_port : "IN";
+    const slots = this.getSlots(parentPort);
     const poles = OMSCHAKELAAR_POLES.includes(this.props.aantal_polen) ? this.props.aantal_polen : "4";
     const rating = OMSCHAKELAAR_RATINGS.includes(this.props.amperage) ? this.props.amperage : "63";
     const address = typeof this.props.adres === "string" ? this.props.adres.trim() : "";
@@ -38,106 +74,15 @@ export class Omschakelaar extends Electro_Item {
     const orientation = this.getParent()?.getType() === "Kring" ? "vertical" : "horizontal";
 
     return orientation === "vertical"
-      ? this.renderVertical(branches, ratingLabel, address)
-      : this.renderHorizontal(branches, ratingLabel, address);
+      ? this.renderVertical(parentPort, slots, ratingLabel, address)
+      : this.renderHorizontal(parentPort, slots, ratingLabel, address);
   }
 
-  private renderHorizontal(
-    branches: ReturnType<Omschakelaar["getRenderBranches"]>,
-    ratingLabel: string,
-    address: string,
-  ): SVGelement {
-    const upperY = Math.max(22, branches[0].svg.yup);
-    const lowerY = upperY + Math.max(38, branches[0].svg.ydown + branches[1].svg.yup + 18);
-    const centerY = (upperY + lowerY) / 2;
-    const contactX = 58;
-    const endpointX = contactX + 30 + Math.max(branches[0].svg.xleft, branches[1].svg.xleft);
-    const labelBottom = lowerY + (address === "" ? 24 : 38);
-    const width = Math.max(
-      endpointX + branches[0].svg.xright,
-      endpointX + branches[1].svg.xright,
-      88 + svgTextWidth(htmlspecialchars(address), 10, ""),
-    );
-    const svg = new SVGelement();
-    svg.xleft = 1;
-    svg.xright = width - svg.xleft;
-    svg.yup = centerY;
-    svg.ydown = labelBottom - centerY;
-    svg.data = this.renderComponent(
-      "horizontal",
-      branches,
-      { x: 26, y: centerY },
-      [
-        { x: contactX, y: upperY, endpointX, endpointY: upperY },
-        { x: contactX, y: lowerY, endpointX, endpointY: lowerY },
-      ],
-      ratingLabel,
-      address,
-      { x: 44, ratingY: lowerY + 15, addressY: lowerY + 29 },
-    );
-    return svg;
-  }
-
-  private renderVertical(
-    branches: ReturnType<Omschakelaar["getRenderBranches"]>,
-    ratingLabel: string,
-    address: string,
-  ): SVGelement {
-    const endpointY = Math.max(18, branches[0].svg.yup, branches[1].svg.yup);
-    const contactY = endpointY + 24;
-    const leftX = Math.round(Math.max(34, branches[0].svg.xleft));
-    const rightX = Math.round(leftX + Math.max(
-      72,
-      branches[0].svg.xright + branches[1].svg.xleft + 28,
-    ));
-    const centerX = Math.round((leftX + rightX) / 2);
-    const commonY = contactY + 34;
-    // The port label ("IN") sits on its own line right next to the common
-    // contact; the rating/address labels start a full line below it so long
-    // text like "63A 4P" never collides with the port label.
-    const ratingY = commonY + 16;
-    const addressY = commonY + 30;
-    const incomingY = commonY + (address === "" ? 24 : 38);
-    const labelX = centerX + 20;
-    const labelWidth = Math.max(
-      svgTextWidth(htmlspecialchars(ratingLabel), 10, ""),
-      svgTextWidth(htmlspecialchars(address), 10, ""),
-    );
-    const width = Math.max(
-      leftX + branches[0].svg.xright,
-      rightX + branches[1].svg.xright,
-      labelX + labelWidth,
-    );
-    const svg = new SVGelement();
-    svg.xleft = centerX;
-    svg.xright = width - centerX;
-    svg.yup = incomingY;
-    svg.ydown = 0;
-    svg.data = this.renderComponent(
-      "vertical",
-      branches,
-      { x: centerX, y: commonY },
-      [
-        { x: leftX, y: contactY, endpointX: leftX, endpointY },
-        { x: rightX, y: contactY, endpointX: rightX, endpointY },
-      ],
-      ratingLabel,
-      address,
-      { x: labelX, ratingY, addressY },
-      incomingY,
-    );
-    return svg;
-  }
-
-  /**
-   * The switch's two connectors have fixed structural roles: whichever port
-   * is not one of these children is always drawn/labelled "IN" (it is
-   * whatever the switch's own tree parent happens to be), and the two
-   * connectors are always "OUT1" (left/top) and "OUT2" (right/bottom), in
-   * that order, regardless of which one carries a pre-existing wire.
-   */
-  private getRenderBranches() {
-    return (["OUT1", "OUT2"] as const).map(port => {
+  private getSlots(parentPort: OmschakelaarPort): Slot[] {
+    return SLOT_ORDER.map(port => {
+      if (port === parentPort) {
+        return { port, isParent: true, connector: undefined, svg: new SVGelement() };
+      }
       const connector = this.sourcelist.data.find((candidate, index) =>
         this.sourcelist.active[index]
         && candidate.parent === this.id
@@ -146,77 +91,197 @@ export class Omschakelaar extends Electro_Item {
       );
       return {
         port,
+        isParent: false,
         connector,
-        svg: connector === undefined
-          ? new SVGelement()
-          : this.sourcelist.toSVG(connector.id, "horizontal"),
+        svg: connector === undefined ? new SVGelement() : this.sourcelist.toSVG(connector.id, "horizontal"),
       };
     });
   }
 
-  private renderComponent(
-    orientation: "horizontal" | "vertical",
-    branches: ReturnType<Omschakelaar["getRenderBranches"]>,
-    common: { x: number; y: number },
-    outputs: Array<{ x: number; y: number; endpointX: number; endpointY: number }>,
+  private renderHorizontal(
+    parentPort: OmschakelaarPort,
+    slots: Slot[],
     ratingLabel: string,
     address: string,
-    labels: { x: number; ratingY: number; addressY: number },
-    incomingY = common.y,
-  ): string {
-    let data = `<g data-component="omschakelaar" data-position="neutral" data-orientation="${orientation}">`;
-    data += orientation === "vertical"
-      ? `<line data-input-conductor="IN" x1="${common.x}" y1="${incomingY}" x2="${common.x}" y2="${common.y}" stroke="black" stroke-linecap="round" />`
-      : `<line data-input-conductor="IN" x1="1" y1="${common.y}" x2="${common.x}" y2="${common.y}" stroke="black" stroke-linecap="round" />`;
-    data += `<circle data-switch-contact="IN" cx="${common.x}" cy="${common.y}" r="2.5" fill="black" />`;
-
-    branches.forEach((branch, index) => {
-      const output = outputs[index];
-      const escapedPort = htmlspecialchars(branch.port);
-      data += `<circle data-switch-contact="${escapedPort}" cx="${output.x}" cy="${output.y}" r="2.5" fill="black" />`;
-      data += `<line data-output-conductor="${escapedPort}" x1="${output.x}" y1="${output.y}" x2="${output.endpointX}" y2="${output.endpointY}" stroke="black" stroke-linecap="round" />`;
-    });
-
-    const armEndX = orientation === "vertical" ? common.x : common.x + 20;
-    const armEndY = orientation === "vertical" ? common.y - 18 : common.y;
-    data += `<line data-selector-arm="true" x1="${common.x}" y1="${common.y}" x2="${armEndX}" y2="${armEndY}" stroke="black" />`;
-
-    if (orientation === "vertical") {
-      data += `<text x="${common.x + 7}" y="${common.y + 4}" font-family="Arial, Helvetica, sans-serif" font-size="9">IN</text>`;
-      branches.forEach((branch, index) => {
-        const output = outputs[index];
-        data += `<text x="${output.x}" y="${output.y - 7}" style="text-anchor:middle" font-family="Arial, Helvetica, sans-serif" font-size="9">${htmlspecialchars(branch.port)}</text>`;
-      });
+  ): SVGelement {
+    const [top, middle, bottom] = slots;
+    const contactX = 58;
+    const commonX = 26;
+    let upperY: number;
+    let centerY: number;
+    let lowerY: number;
+    if (middle.isParent) {
+      upperY = Math.max(22, top.svg.yup);
+      lowerY = upperY + Math.max(38, top.svg.ydown + bottom.svg.yup + 18);
+      centerY = (upperY + lowerY) / 2;
     } else {
-      data += `<text x="5" y="${common.y - 7}" font-family="Arial, Helvetica, sans-serif" font-size="9">IN</text>`;
-      branches.forEach((branch, index) => {
-        const output = outputs[index];
-        data += `<text x="${output.x + 7}" y="${output.y - 5}" font-family="Arial, Helvetica, sans-serif" font-size="9">${htmlspecialchars(branch.port)}</text>`;
-      });
+      upperY = Math.max(22, top.svg.yup);
+      centerY = upperY + Math.max(19, top.svg.ydown + middle.svg.yup + 14);
+      lowerY = centerY + Math.max(19, middle.svg.ydown + bottom.svg.yup + 14);
+    }
+    const rowY: Record<OmschakelaarPort, number> = { OUT1: upperY, IN: centerY, OUT2: lowerY };
+    const endpointX = contactX + 30 + Math.max(...slots.map(slot => slot.svg.xleft));
+    const labelBottom = lowerY + (address === "" ? 24 : 38);
+    const width = Math.max(
+      ...slots.map(slot => endpointX + slot.svg.xright),
+      88 + svgTextWidth(htmlspecialchars(address), 10, ""),
+    );
+    const parentY = rowY[parentPort];
+    const contact = (port: OmschakelaarPort): Point => ({ x: port === "IN" ? commonX : contactX, y: rowY[port] });
+    const layout: Layout = {
+      orientation: "horizontal",
+      parentPort,
+      contacts: { OUT1: contact("OUT1"), IN: contact("IN"), OUT2: contact("OUT2") },
+      ends: {
+        OUT1: { x: endpointX, y: upperY },
+        IN: { x: endpointX, y: centerY },
+        OUT2: { x: endpointX, y: lowerY },
+      },
+      parentConductor: { from: { x: 1, y: parentY }, to: contact(parentPort) },
+      arm: { from: { x: commonX, y: centerY }, to: { x: commonX + 20, y: centerY } },
+      portLabels: {
+        OUT1: { x: contactX + 7, y: upperY - 5, anchor: "start" },
+        IN: { x: 5, y: centerY - 7, anchor: "start" },
+        OUT2: { x: contactX + 7, y: lowerY - 5, anchor: "start" },
+      },
+      rating: { x: 44, y: lowerY + 15 },
+      address: { x: 44, y: lowerY + 29 },
+      metadataAnchor: "middle",
+      incomingY: parentY,
+    };
+    const svg = new SVGelement();
+    svg.xleft = 1;
+    svg.xright = width - svg.xleft;
+    svg.yup = parentY;
+    svg.ydown = labelBottom - parentY;
+    svg.data = this.renderComponent(layout, slots, ratingLabel, address);
+    return svg;
+  }
+
+  private renderVertical(
+    parentPort: OmschakelaarPort,
+    slots: Slot[],
+    ratingLabel: string,
+    address: string,
+  ): SVGelement {
+    const [left, middle, right] = slots;
+    const endpointY = Math.max(18, ...slots.map(slot => slot.svg.yup));
+    const contactY = endpointY + 24;
+    const commonY = contactY + 34;
+    let leftX: number;
+    let centerX: number;
+    let rightX: number;
+    if (middle.isParent) {
+      leftX = Math.round(Math.max(34, left.svg.xleft));
+      rightX = Math.round(leftX + Math.max(72, left.svg.xright + right.svg.xleft + 28));
+      centerX = Math.round((leftX + rightX) / 2);
+    } else {
+      leftX = Math.round(Math.max(34, left.svg.xleft));
+      centerX = Math.round(leftX + Math.max(36, left.svg.xright + middle.svg.xleft + 28));
+      rightX = Math.round(centerX + Math.max(36, middle.svg.xright + right.svg.xleft + 28));
+    }
+    const columnX: Record<OmschakelaarPort, number> = { OUT1: leftX, IN: centerX, OUT2: rightX };
+    const parentX = columnX[parentPort];
+    // The port label ("IN"/"OUT1"/"OUT2") sits on its own line next to its
+    // contact; the rating/address labels start a full line below it so long
+    // text like "63A 4P" never collides with the port label.
+    const ratingY = commonY + 16;
+    const addressY = commonY + 30;
+    const incomingY = commonY + (address === "" ? 24 : 38);
+    const labelX = parentX + 20;
+    const labelWidth = Math.max(
+      svgTextWidth(htmlspecialchars(ratingLabel), 10, ""),
+      svgTextWidth(htmlspecialchars(address), 10, ""),
+    );
+    const width = Math.max(
+      leftX + left.svg.xright,
+      centerX + middle.svg.xright,
+      rightX + right.svg.xright,
+      labelX + labelWidth,
+    );
+    const contact = (port: OmschakelaarPort): Point => ({ x: columnX[port], y: port === "IN" ? commonY : contactY });
+    const layout: Layout = {
+      orientation: "vertical",
+      parentPort,
+      contacts: { OUT1: contact("OUT1"), IN: contact("IN"), OUT2: contact("OUT2") },
+      ends: {
+        OUT1: { x: leftX, y: endpointY },
+        IN: { x: centerX, y: endpointY },
+        OUT2: { x: rightX, y: endpointY },
+      },
+      parentConductor: { from: { x: parentX, y: incomingY }, to: contact(parentPort) },
+      arm: { from: { x: centerX, y: commonY }, to: { x: centerX, y: commonY - 18 } },
+      portLabels: {
+        OUT1: { x: leftX, y: contactY - 7, anchor: "middle" },
+        IN: { x: centerX + 7, y: commonY + 4, anchor: "start" },
+        OUT2: { x: rightX, y: contactY - 7, anchor: "middle" },
+      },
+      rating: { x: labelX, y: ratingY },
+      address: { x: labelX, y: addressY },
+      metadataAnchor: "start",
+      incomingY,
+    };
+    const svg = new SVGelement();
+    svg.xleft = parentX;
+    svg.xright = width - parentX;
+    svg.yup = incomingY;
+    svg.ydown = 0;
+    svg.data = this.renderComponent(layout, slots, ratingLabel, address);
+    return svg;
+  }
+
+  private renderComponent(
+    layout: Layout,
+    slots: Slot[],
+    ratingLabel: string,
+    address: string,
+  ): string {
+    const { parentPort } = layout;
+    const escapedParentPort = htmlspecialchars(parentPort);
+    const line = (attribute: string, from: Point, to: Point) =>
+      `<line ${attribute} x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="black" stroke-linecap="round" />`;
+    let data = `<g data-component="omschakelaar" data-position="neutral" data-orientation="${layout.orientation}">`;
+    data += line(`data-input-conductor="${escapedParentPort}"`, layout.parentConductor.from, layout.parentConductor.to);
+
+    for (const slot of slots) {
+      const escapedPort = htmlspecialchars(slot.port);
+      const contact = layout.contacts[slot.port];
+      data += `<circle data-switch-contact="${escapedPort}" cx="${contact.x}" cy="${contact.y}" r="2.5" fill="black" />`;
+      if (!slot.isParent) {
+        data += line(`data-output-conductor="${escapedPort}"`, contact, layout.ends[slot.port]);
+      }
     }
 
-    const metadataAnchor = orientation === "vertical" ? "start" : "middle";
-    data += `<text data-switch-rating="true" x="${labels.x}" y="${labels.ratingY}" text-anchor="${metadataAnchor}" font-family="Arial, Helvetica, sans-serif" font-size="10">${htmlspecialchars(ratingLabel)}</text>`;
+    data += `<line data-selector-arm="true" x1="${layout.arm.from.x}" y1="${layout.arm.from.y}" x2="${layout.arm.to.x}" y2="${layout.arm.to.y}" stroke="black" />`;
+
+    for (const slot of slots) {
+      const label = layout.portLabels[slot.port];
+      const anchor = label.anchor === "middle" ? ' style="text-anchor:middle"' : "";
+      data += `<text x="${label.x}" y="${label.y}"${anchor} font-family="Arial, Helvetica, sans-serif" font-size="9">${htmlspecialchars(slot.port)}</text>`;
+    }
+
+    data += `<text data-switch-rating="true" x="${layout.rating.x}" y="${layout.rating.y}" text-anchor="${layout.metadataAnchor}" font-family="Arial, Helvetica, sans-serif" font-size="10">${htmlspecialchars(ratingLabel)}</text>`;
     if (address !== "") {
-      data += `<text data-switch-address="true" x="${labels.x}" y="${labels.addressY}" text-anchor="${metadataAnchor}" font-family="Arial, Helvetica, sans-serif" font-size="10">${htmlspecialchars(address)}</text>`;
+      data += `<text data-switch-address="true" x="${layout.address.x}" y="${layout.address.y}" text-anchor="${layout.metadataAnchor}" font-family="Arial, Helvetica, sans-serif" font-size="10">${htmlspecialchars(address)}</text>`;
     }
 
-    branches.forEach((branch, index) => {
-      const output = outputs[index];
-      const branchX = output.endpointX - branch.svg.xleft;
-      const branchY = output.endpointY - branch.svg.yup;
-      data += `<g data-branch-origin="${htmlspecialchars(branch.port)}" data-x="${output.endpointX}" data-y="${output.endpointY}">`;
-      if (branch.svg.data !== "") {
-        data += `<svg x="${branchX}" y="${branchY}">${branch.svg.data}</svg>`;
+    for (const slot of slots) {
+      if (slot.isParent) continue;
+      const end = layout.ends[slot.port];
+      const branchX = end.x - slot.svg.xleft;
+      const branchY = end.y - slot.svg.yup;
+      data += `<g data-branch-origin="${htmlspecialchars(slot.port)}" data-x="${end.x}" data-y="${end.y}">`;
+      if (slot.svg.data !== "") {
+        data += `<svg x="${branchX}" y="${branchY}">${slot.svg.data}</svg>`;
       }
       data += "</g>";
-    });
+    }
 
-    branches.forEach((branch, index) => {
-      if (branch.connector === undefined) return;
-      const output = outputs[index];
-      data += `<g data-schema-item-id="${branch.connector.id}" data-explicit-port-anchor="${htmlspecialchars(branch.port)}" data-schema-anchor-x="${output.endpointX}" data-schema-anchor-y="${output.endpointY}" data-schema-end-x="${output.endpointX}" data-schema-width="0" data-schema-height="0"></g>`;
-    });
+    for (const slot of slots) {
+      if (slot.isParent || slot.connector === undefined) continue;
+      const end = layout.ends[slot.port];
+      data += `<g data-schema-item-id="${slot.connector.id}" data-explicit-port-anchor="${htmlspecialchars(slot.port)}" data-schema-anchor-x="${end.x}" data-schema-anchor-y="${end.y}" data-schema-end-x="${end.x}" data-schema-width="0" data-schema-height="0"></g>`;
+    }
     return data + "</g>";
   }
 }
