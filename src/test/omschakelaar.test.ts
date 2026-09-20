@@ -5,6 +5,7 @@ import { SchemaCommandError } from "../application/SchemaStore";
 import { LegacySchemaDocumentReader } from "../application/LegacySchemaDocumentReader";
 import { validateSchemaDocument } from "../application/SchemaValidation";
 import { structureFromJson } from "../legacy/persistence/EdsCodec";
+import { flattenSVGfromString } from "../general";
 
 function createCircuitStore() {
   const structure = new Hierarchical_List();
@@ -352,6 +353,28 @@ describe("Omschakelaar", () => {
     expect(Number(inputConductor.getAttribute("y1"))).toBe(Number(wrapper.getAttribute("data-schema-height")));
     expect(Number(inputConductor.getAttribute("x1")) + Number(wrapper.getAttribute("x")))
       .toBe(Number(parentLine.getAttribute("x1")));
+  });
+
+  it("keeps the vertical input axis aligned after live-preview SVG flattening", () => {
+    // The React preview does not render raw toSVG() output: SchematicRenderStore
+    // runs it through flattenSVGfromString first. That flattener only recurses
+    // into <svg> wrappers to propagate accumulated x/y shifts; a component that
+    // wraps its own drawing in a <g> (as Omschakelaar does) must still end up
+    // shifted the same way as its ancestors' plain <line> elements.
+    const structure = new Hierarchical_List();
+    const connection = structure.addItem("Aansluiting");
+    const store = new LegacySchemaStore(structure);
+    const circuitId = store.commands.addItem(connection.id, "Kring");
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+
+    const flattened = flattenSVGfromString(store.getLegacyDocument().toSVG(0, "horizontal").data);
+    const document = new DOMParser().parseFromString(flattened, "image/svg+xml");
+    const wrapper = document.querySelector(`g[data-schema-item-id="${switchId}"]`)!;
+    const inputConductor = wrapper.querySelector('[data-input-conductor="IN"]')!;
+    const cableLine = wrapper.nextElementSibling!;
+
+    expect(cableLine.tagName.toLowerCase()).toBe("line");
+    expect(Number(inputConductor.getAttribute("x1"))).toBe(Number(cableLine.getAttribute("x1")));
   });
 
   it("uses pixel-aligned axes when both vertical outputs are wired", () => {

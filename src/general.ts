@@ -179,6 +179,37 @@ function flattenSVG(
         str = '<svg>' + str + '</svg>';
       }
     }
+  } else if (SVGstruct.localName == "g") {
+    // Unlike <svg>, a <g> establishes no coordinate system of its own, so its
+    // drawable descendants (e.g. the omschakelaar's self-contained <g>) still
+    // need the shift accumulated so far. Recurse instead of serializing
+    // verbatim, and shift any zero-size schema-anchor attributes carried
+    // directly on the <g> itself (used for port/insertion anchors).
+    if (shiftx != 0) {
+      for (const attrName of ["data-schema-anchor-x", "data-schema-end-x"]) {
+        const attr = outstruct.attributes.getNamedItem(attrName);
+        if (attr) attr.nodeValue = String(parseFloat(attr.nodeValue) + shiftx);
+      }
+    }
+    if (shifty != 0) {
+      const attr = outstruct.attributes.getNamedItem("data-schema-anchor-y");
+      if (attr) attr.nodeValue = String(parseFloat(attr.nodeValue) + shifty);
+    }
+    var innerG = "";
+    for (var gi = 0; gi < SVGstruct.children.length; gi++) {
+      innerG = innerG.concat(flattenSVG(
+        SVGstruct.children[gi],
+        shiftx,
+        shifty,
+        node + 1,
+        0,
+        pageMarkers,
+      ), "\n");
+    }
+    var openTagG = X.serializeToString(outstruct.cloneNode(false))
+      .replace(/\/>\s*$/, ">")
+      .replace(/xmlns="[^"]+"/g, '');
+    str = openTagG + innerG + "</g>";
   } else {
     if (SVGstruct.localName == "line") {
       if (shiftx != 0) {
