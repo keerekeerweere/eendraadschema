@@ -101,8 +101,9 @@ export class Omschakelaar extends Electro_Item {
     );
     const centerX = (leftX + rightX) / 2;
     const commonY = contactY + 34;
-    const incomingY = commonY + 28;
-    const labelBottom = incomingY + (address === "" ? 22 : 36);
+    const ratingY = commonY + 4;
+    const addressY = commonY + 18;
+    const incomingY = commonY + (address === "" ? 22 : 32);
     const labelX = centerX + 20;
     const labelWidth = Math.max(
       svgTextWidth(htmlspecialchars(ratingLabel), 10, ""),
@@ -117,7 +118,7 @@ export class Omschakelaar extends Electro_Item {
     svg.xleft = centerX;
     svg.xright = width - centerX;
     svg.yup = incomingY;
-    svg.ydown = labelBottom - incomingY;
+    svg.ydown = 0;
     svg.data = this.renderComponent(
       "vertical",
       parentPort,
@@ -129,7 +130,7 @@ export class Omschakelaar extends Electro_Item {
       ],
       ratingLabel,
       address,
-      { x: labelX, ratingY: incomingY + 13, addressY: incomingY + 27 },
+      { x: labelX, ratingY, addressY },
       incomingY,
     );
     return svg;

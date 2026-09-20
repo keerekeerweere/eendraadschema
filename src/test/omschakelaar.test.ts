@@ -332,6 +332,21 @@ describe("Omschakelaar", () => {
     expect(Number(out1.getAttribute("cy"))).toBeLessThan(Number(out2.getAttribute("cy")));
   });
 
+  it("joins the vertical input wire at the switch wrapper boundary", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    const document = new DOMParser().parseFromString(
+      store.getLegacyDocument().toSVG(0, "horizontal").data,
+      "image/svg+xml",
+    );
+    const wrapper = document.querySelector(`svg[data-schema-item-id="${switchId}"]`)!;
+    const component = wrapper.querySelector('[data-component="omschakelaar"]')!;
+    const inputConductor = component.querySelector('[data-input-conductor="IN"]')!;
+
+    expect(Number(inputConductor.getAttribute("x1"))).toBe(Number(inputConductor.getAttribute("x2")));
+    expect(Number(inputConductor.getAttribute("y1"))).toBe(Number(wrapper.getAttribute("data-schema-height")));
+  });
+
   it("creates an unprotected connection circuit below a physical port", () => {
     const { store, circuitId } = createCircuitStore();
     const switchId = store.commands.addItem(circuitId, "Omschakelaar");
