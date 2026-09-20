@@ -344,9 +344,14 @@ describe("Omschakelaar", () => {
     const wrapper = document.querySelector(`svg[data-schema-item-id="${switchId}"]`)!;
     const component = wrapper.querySelector('[data-component="omschakelaar"]')!;
     const inputConductor = component.querySelector('[data-input-conductor="IN"]')!;
+    const parentWrapper = wrapper.parentElement!;
+    const parentLine = Array.from(parentWrapper.querySelectorAll(":scope > line"))
+      .find(line => line.getAttribute("y1") === wrapper.getAttribute("data-schema-height"))!;
 
     expect(Number(inputConductor.getAttribute("x1"))).toBe(Number(inputConductor.getAttribute("x2")));
     expect(Number(inputConductor.getAttribute("y1"))).toBe(Number(wrapper.getAttribute("data-schema-height")));
+    expect(Number(inputConductor.getAttribute("x1")) + Number(wrapper.getAttribute("x")))
+      .toBe(Number(parentLine.getAttribute("x1")));
   });
 
   it("uses pixel-aligned axes when both vertical outputs are wired", () => {
@@ -369,6 +374,27 @@ describe("Omschakelaar", () => {
       expect(Number(contact.getAttribute("cx")) % 1).toBe(0);
       expect(Number(contact.getAttribute("cy")) % 1).toBe(0);
     }
+  });
+
+  it("keeps the input axis aligned when the circuit has a preceding sibling", () => {
+    const { store, circuitId } = createCircuitStore();
+    store.commands.addItem(circuitId, "Contactdoos");
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    const document = new DOMParser().parseFromString(
+      store.getLegacyDocument().toSVG(0, "horizontal").data,
+      "image/svg+xml",
+    );
+    const wrapper = document.querySelector(`svg[data-schema-item-id="${switchId}"]`)!;
+    const component = wrapper.querySelector('[data-component="omschakelaar"]')!;
+    const inputConductor = component.querySelector('[data-input-conductor="IN"]')!;
+    const parentWrapper = wrapper.parentElement!;
+    const parentLine = Array.from(parentWrapper.querySelectorAll(":scope > line"))
+      .find(line => line.getAttribute("y1") === String(
+        Number(wrapper.getAttribute("y")) + Number(wrapper.getAttribute("data-schema-height")),
+      ))!;
+
+    expect(Number(inputConductor.getAttribute("x1")) + Number(wrapper.getAttribute("x")))
+      .toBe(Number(parentLine.getAttribute("x1")));
   });
 
   it("creates an unprotected connection circuit below a physical port", () => {

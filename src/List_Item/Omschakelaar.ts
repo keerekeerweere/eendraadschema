@@ -94,12 +94,12 @@ export class Omschakelaar extends Electro_Item {
   ): SVGelement {
     const endpointY = Math.max(18, branches[0].svg.yup, branches[1].svg.yup);
     const contactY = endpointY + 24;
-    const leftX = Math.max(34, branches[0].svg.xleft);
-    const rightX = leftX + Math.max(
+    const leftX = Math.round(Math.max(34, branches[0].svg.xleft));
+    const rightX = Math.round(leftX + Math.max(
       72,
       branches[0].svg.xright + branches[1].svg.xleft + 28,
-    );
-    const centerX = (leftX + rightX) / 2;
+    ));
+    const centerX = Math.round((leftX + rightX) / 2);
     const commonY = contactY + 34;
     const ratingY = commonY + 4;
     const addressY = commonY + 18;
