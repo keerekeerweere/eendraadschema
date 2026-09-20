@@ -80,9 +80,50 @@ export function validateSchemaDocument(document: SchemaDocumentReader): readonly
       issues.push(issue("error", "ORPHANED_ITEM", undefined, item.id,
         `Item ${item.id} hoort niet bij een verdeelbord.`));
     }
+    if (item.type === "Omschakelaar") {
+      validateOmschakelaar(document, item.id, item.summary.connectionPort, issues);
+    }
   }
 
   return Object.freeze(issues);
+}
+
+function validateOmschakelaar(
+  document: SchemaDocumentReader,
+  itemId: number,
+  parentPort: string | undefined,
+  issues: ValidationIssue[],
+): void {
+  const directChildren = document.getChildren(itemId);
+  const connectors = directChildren.filter(child => child.type === "Omschakelaarpoort");
+  if (connectors.length !== 2) {
+    issues.push(issue("error", "OMSCHAKELAAR_PORT_COUNT", undefined, itemId,
+      "Een omschakelaar moet exact twee aansluitpoorten hebben."));
+  }
+
+  const portNames = connectors.map(connector => connector.summary.connectionPort);
+  if (new Set(portNames).size !== portNames.length) {
+    issues.push(issue("error", "OMSCHAKELAAR_DUPLICATE_PORT", undefined, itemId,
+      "De aansluitpoorten van de omschakelaar moeten uniek zijn."));
+  }
+  if (parentPort !== undefined && portNames.includes(parentPort)) {
+    issues.push(issue("error", "OMSCHAKELAAR_PARENT_PORT_CONFLICT", undefined, itemId,
+      "De poort aan de invoerzijde mag niet ook als aftakpoort voorkomen."));
+  }
+
+  for (const connector of connectors) {
+    const children = document.getChildren(connector.id);
+    if (children.length > 1 || children.some(child => child.type !== "Kring")) {
+      issues.push(issue("error", "OMSCHAKELAAR_INVALID_PORT_CHILD", undefined, connector.id,
+        "Een omschakelaarpoort mag maximaal één kring bevatten."));
+    }
+  }
+  for (const child of directChildren) {
+    if (child.type !== "Omschakelaarpoort") {
+      issues.push(issue("error", "OMSCHAKELAAR_INVALID_PORT_CHILD", undefined, child.id,
+        "Een omschakelaar mag alleen vaste aansluitpoorten bevatten."));
+    }
+  }
 }
 
 function issue(

@@ -4,6 +4,9 @@ import { describe, expect, it } from "vitest";
 import { Hierarchical_List, PUBLIC_ELECTRO_ITEM_TYPES } from "../Hierarchical_List";
 import { LegacySchemaStore } from "../application/LegacySchemaStore";
 import { SchemaCommandError } from "../application/SchemaStore";
+import { LegacySchemaDocumentReader } from "../application/LegacySchemaDocumentReader";
+import { validateSchemaDocument } from "../application/SchemaValidation";
+import { structureFromJson } from "../legacy/persistence/EdsCodec";
 
 function createCircuitStore() {
   const structure = new Hierarchical_List();
@@ -160,5 +163,63 @@ describe("Omschakelaar", () => {
     const switchId = store.commands.addItem(circuitId, "Omschakelaar");
 
     expectInvalidChange(() => store.commands.updateConfiguredItem(switchId, { [key]: value }));
+  });
+
+  it("reports malformed connector topology without crashing", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    const structure = store.getLegacyDocument();
+    const [firstPort, secondPort] = store.getSnapshot().document.getChildren(switchId);
+
+    structure.getElectroItemById(secondPort.id)!.props.poort = "OUT1";
+    const invalidChild = structure.createItem("Contactdoos");
+    structure.insertChildAfterId(invalidChild, firstPort.id);
+
+    const issues = validateSchemaDocument(new LegacySchemaDocumentReader(structure));
+    expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
+      "OMSCHAKELAAR_DUPLICATE_PORT",
+      "OMSCHAKELAAR_INVALID_PORT_CHILD",
+    ]));
+  });
+
+  it("reports a missing connector and a parent-port conflict", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    const structure = store.getLegacyDocument();
+    const [firstPort, secondPort] = store.getSnapshot().document.getChildren(switchId);
+
+    structure.deleteById(secondPort.id);
+    structure.getElectroItemById(switchId)!.props.parent_port = "OUT1";
+    structure.getElectroItemById(firstPort.id)!.props.poort = "OUT1";
+
+    const issues = validateSchemaDocument(new LegacySchemaDocumentReader(structure));
+    expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
+      "OMSCHAKELAAR_PORT_COUNT",
+      "OMSCHAKELAAR_PARENT_PORT_CONFLICT",
+    ]));
+  });
+
+  it("round trips switch properties, port identities, wiring, and stable IDs", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    store.commands.updateConfiguredItem(switchId, {
+      poleCount: "2",
+      amperage: "80",
+      address: "Victron bypass",
+    });
+    const portIds = store.getSnapshot().document.getChildren(switchId).map(port => port.id);
+    const branchId = store.commands.addItem(portIds[1], "Kring");
+
+    const restored = structureFromJson(store.getLegacyDocument().toJsonObject(false), null, 6);
+    const restoredStore = new LegacySchemaStore(restored);
+
+    expect(restoredStore.getSnapshot().properties.getConfiguredItem(switchId)?.values).toMatchObject({
+      poleCount: "2",
+      amperage: "80",
+      parentPort: "IN",
+      address: "Victron bypass",
+    });
+    expect(restoredStore.getSnapshot().document.getChildren(switchId).map(port => port.id)).toEqual(portIds);
+    expect(restoredStore.getSnapshot().document.getItem(branchId)?.parentId).toBe(portIds[1]);
   });
 });
