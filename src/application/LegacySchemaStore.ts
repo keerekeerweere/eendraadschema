@@ -18,6 +18,7 @@ import { validateAndMapLightPointChanges } from "./LightPointPropertyValidation"
 import { configuredItemTypes, type ConfiguredItemPropertyChanges } from "./ConfiguredItemProperties";
 import { freezeBoardLayout, type BoardLayout } from "../domain/BoardLayout";
 import { validateAndMapConfiguredItemChanges } from "./ConfiguredItemPropertyValidation";
+import { remainingOmschakelaarPorts } from "./Omschakelaar";
 import { LegacySchemaDocumentReader } from "./LegacySchemaDocumentReader";
 import { LegacySchemaPropertyReader } from "./LegacySchemaPropertyReader";
 import { validateSchemaDocument } from "./SchemaValidation";
@@ -130,6 +131,7 @@ export class LegacySchemaStore implements SchemaStore {
   }
 
   private addItem(parentId: number | null, type: string): number {
+    this.assertPublicItemType(type);
     const parent = this.getParent(parentId);
     this.assertChildAllowed(parent, type);
     this.assertParentCapacity(parent);
@@ -143,6 +145,14 @@ export class LegacySchemaStore implements SchemaStore {
         this.structure.insertChildAfterId(placeholder, parent.id);
         this.structure.adjustTypeById(placeholder.id, type);
         item = this.requireItem(placeholder.id);
+      }
+
+      if (item.getType() === "Omschakelaar") {
+        for (const poort of [...remainingOmschakelaarPorts(item.props.parent_port)].reverse()) {
+          const connector = this.structure.createItem("Omschakelaarpoort");
+          connector.props.poort = poort;
+          this.structure.insertChildAfterId(connector, item.id);
+        }
       }
 
       this.createRequiredPlacementTask(item.id, item.getType());
@@ -181,6 +191,7 @@ export class LegacySchemaStore implements SchemaStore {
   }
 
   private insertItemBefore(itemId: number, type: string): number {
+    this.assertPublicItemType(type);
     const item = this.requireItem(itemId);
     this.assertUserEditable(item);
     this.assertNotBoardRoot(itemId);
@@ -283,6 +294,7 @@ export class LegacySchemaStore implements SchemaStore {
       if (typeof changedType !== "string") {
         throw new SchemaCommandError("INVALID_CHANGE", "Het itemtype moet tekst zijn.");
       }
+      this.assertPublicItemType(changedType);
       const parent = this.getParent(item.parent === 0 ? null : item.parent);
       this.assertChildAllowed(parent, changedType);
     }
@@ -968,10 +980,25 @@ export class LegacySchemaStore implements SchemaStore {
   }
 
   private assertUserEditable(item: Electro_Item): void {
+    if (item.getType() === "Omschakelaarpoort") {
+      throw new SchemaCommandError(
+        "INVALID_CHANGE",
+        "Een vaste omschakelaarpoort kan niet afzonderlijk worden aangepast.",
+      );
+    }
     if (item.isAttribuut()) {
       throw new SchemaCommandError(
         "INVALID_CHANGE",
         "Gegenereerde attribuutitems kunnen niet afzonderlijk worden aangepast.",
+      );
+    }
+  }
+
+  private assertPublicItemType(type: string): void {
+    if (type === "Omschakelaarpoort") {
+      throw new SchemaCommandError(
+        "INVALID_CHANGE",
+        "Een omschakelaarpoort wordt automatisch met de omschakelaar aangemaakt.",
       );
     }
   }
