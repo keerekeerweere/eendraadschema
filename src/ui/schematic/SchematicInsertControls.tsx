@@ -5,7 +5,7 @@ import type { SchemaStore } from "../../application/SchemaStore";
 import { useSchemaSnapshot } from "../useSchemaSnapshot";
 import { ui } from "../uiStyles";
 
-type InsertMode = "before" | "end";
+type InsertMode = "before" | "end" | "start";
 
 interface InsertTarget {
   readonly itemId: number;
@@ -54,6 +54,37 @@ function insertionTypes(node: HierarchyViewNode, mode: InsertMode): readonly str
   return mode === "before"
     ? node.capabilities.allowedInsertBeforeTypes
     : node.capabilities.allowedChildTypes;
+}
+
+// Different insert targets can end up anchored at (almost) the same pixel, e.g. "add
+// item after the last child of a Kring" and "add item after the Kring itself" both sit
+// at the end of the Kring's wire when the last child has no trailing space of its own.
+// Spread such overlapping buttons apart horizontally so they remain distinguishable/clickable.
+const OVERLAP_DISTANCE = 12;
+const OVERLAP_SPACING = 14;
+
+function spreadOverlappingTargets(targets: readonly InsertTarget[]): readonly InsertTarget[] {
+  const groups: InsertTarget[][] = [];
+  for (const target of targets) {
+    const group = groups.find((candidate) => {
+      const first = candidate[0];
+      return (
+        Math.abs(first.left - target.left) < OVERLAP_DISTANCE
+        && Math.abs(first.top - target.top) < OVERLAP_DISTANCE
+      );
+    });
+    if (group) group.push(target);
+    else groups.push([target]);
+  }
+
+  return groups.flatMap((group) => {
+    if (group.length === 1) return group;
+    const offsetStart = -((group.length - 1) * OVERLAP_SPACING) / 2;
+    return group.map((target, index) => ({
+      ...target,
+      left: target.left + offsetStart + index * OVERLAP_SPACING,
+    }));
+  });
 }
 
 export function SchematicInsertControls({
@@ -111,22 +142,27 @@ export function SchematicInsertControls({
             ...diagramPoint(element, anchorX, anchorY, overlayElement, false),
           });
         }
-        if (node.childIds.length === 0 && node.capabilities.canAddChild) {
+        if (node.capabilities.canAddChild) {
+          const isKring = node.type === "Kring";
+          const topX = Number(element.dataset.schemaTopX ?? anchorX);
+          const topY = Number(element.dataset.schemaTopY ?? 0);
           nextTargets.push({
             itemId,
-            mode: "end",
-            ...diagramPoint(
-              element,
-              Number(element.dataset.schemaEndX ?? 0),
-              anchorY,
-              overlayElement,
-              true,
-            ),
+            mode: isKring ? "start" : "end",
+            ...(isKring
+              ? diagramPoint(element, topX, topY, overlayElement, false)
+              : diagramPoint(
+                  element,
+                  Number(element.dataset.schemaEndX ?? 0),
+                  anchorY,
+                  overlayElement,
+                  true,
+                )),
           });
         }
       }
 
-      setTargets(nextTargets);
+      setTargets(spreadOverlappingTargets(nextTargets));
     }
 
     updateTargets();
@@ -154,9 +190,13 @@ export function SchematicInsertControls({
   function addItem(): void {
     if (!activeInsert) return;
     try {
+      const node = nodesById.get(activeInsert.itemId);
       const itemId = activeInsert.mode === "before"
         ? schemaStore.commands.insertItemBefore(activeInsert.itemId, activeInsert.selectedType)
         : schemaStore.commands.addItem(activeInsert.itemId, activeInsert.selectedType);
+      if (activeInsert.mode === "start" && node) {
+        schemaStore.commands.moveItem(itemId, { targetParentId: node.id, position: 0 });
+      }
       const document = schemaStore.getSnapshot().document;
       const ancestorItemIds: number[] = [];
       let parentId = document.getItem(itemId)?.parentId;
@@ -181,7 +221,11 @@ export function SchematicInsertControls({
       {targets.map((target) => {
         const node = nodesById.get(target.itemId);
         if (!node) return null;
-        const action = target.mode === "before" ? `vóór ${node.label} invoegen` : `na ${node.label} toevoegen`;
+        const action = target.mode === "before"
+          ? `vóór ${node.label} invoegen`
+          : target.mode === "start"
+            ? `in ${node.label} toevoegen`
+            : `na ${node.label} toevoegen`;
         return (
           <button
             key={`${target.mode}-${target.itemId}`}

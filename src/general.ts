@@ -167,9 +167,11 @@ function flattenSVG(
     if (node > 0 && schemaItemId !== undefined) {
       const anchorY = parseFloat(outstruct.attributes.getNamedItem("data-schema-anchor-y")?.nodeValue ?? "0");
       const endX = parseFloat(outstruct.attributes.getNamedItem("data-schema-end-x")?.nodeValue ?? "0");
+      const topX = parseFloat(outstruct.attributes.getNamedItem("data-schema-top-x")?.nodeValue ?? "0");
+      const topY = parseFloat(outstruct.attributes.getNamedItem("data-schema-top-y")?.nodeValue ?? "0");
       const width = parseFloat(outstruct.attributes.getNamedItem("data-schema-width")?.nodeValue ?? "0");
       const height = parseFloat(outstruct.attributes.getNamedItem("data-schema-height")?.nodeValue ?? "0");
-      str = `<g data-schema-item-id="${schemaItemId}" data-schema-x="${shiftx}" data-schema-y="${shifty}" data-schema-width="${width}" data-schema-height="${height}" data-schema-anchor-x="${shiftx}" data-schema-anchor-y="${shifty + anchorY}" data-schema-end-x="${shiftx + endX}">${str}</g>`;
+      str = `<g data-schema-item-id="${schemaItemId}" data-schema-x="${shiftx}" data-schema-y="${shifty}" data-schema-width="${width}" data-schema-height="${height}" data-schema-anchor-x="${shiftx}" data-schema-anchor-y="${shifty + anchorY}" data-schema-end-x="${shiftx + endX}" data-schema-top-x="${shiftx + topX}" data-schema-top-y="${shifty + topY}">${str}</g>`;
     }
     if (node <= 0) {
       if (outstruct.attributes.getNamedItem("width")) { // make SVG a 0,0 element

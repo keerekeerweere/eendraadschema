@@ -62,6 +62,11 @@ export interface AddBoardLayoutRailProperties {
   readonly moduleCapacity?: number;
 }
 
+export interface ConfigureBoardLayoutProperties {
+  readonly moduleCapacity: number;
+  readonly rowCount: number;
+}
+
 export interface UpdateBoardLayoutRailChanges {
   readonly name?: string;
   readonly moduleCapacity?: number;
@@ -107,6 +112,7 @@ export interface SchemaCommands {
   createPlacementTask(itemId: number, destination: PlacementTaskDestination, locationHint?: string): string;
   resolvePlacementTask(taskId: string): void;
   addBoardLayoutRail(boardId: string, properties?: AddBoardLayoutRailProperties): string;
+  configureBoardLayout(boardId: string, properties: ConfigureBoardLayoutProperties): void;
   updateBoardLayoutRail(
     boardId: string,
     railId: string,

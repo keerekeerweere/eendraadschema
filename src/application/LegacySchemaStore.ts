@@ -35,6 +35,7 @@ import {
   type MoveItemOptions,
   type AddDistributionBoardProperties,
   type AddBoardLayoutRailProperties,
+  type ConfigureBoardLayoutProperties,
   type PlaceBoardLayoutItemProperties,
   type SchemaCommands,
   type SchemaSnapshot,
@@ -89,6 +90,7 @@ export class LegacySchemaStore implements SchemaStore {
       createPlacementTask: this.createPlacementTask.bind(this),
       resolvePlacementTask: this.resolvePlacementTask.bind(this),
       addBoardLayoutRail: this.addBoardLayoutRail.bind(this),
+      configureBoardLayout: this.configureBoardLayout.bind(this),
       updateBoardLayoutRail: this.updateBoardLayoutRail.bind(this),
       deleteBoardLayoutRail: this.deleteBoardLayoutRail.bind(this),
       placeBoardLayoutItem: this.placeBoardLayoutItem.bind(this),
@@ -616,6 +618,48 @@ export class LegacySchemaStore implements SchemaStore {
         ],
       });
       return railId;
+    });
+  }
+
+  private configureBoardLayout(
+    boardId: string,
+    properties: ConfigureBoardLayoutProperties,
+  ): void {
+    this.requireBoard(boardId);
+    this.assertPositiveInteger(properties.moduleCapacity, "Het aantal modules per rij");
+    this.assertPositiveInteger(properties.rowCount, "Het aantal rijen");
+    const layout = this.getBoardLayout(boardId);
+    const removedRailIds = new Set(layout.rails.slice(properties.rowCount).map(rail => rail.id));
+    if (layout.placements.some(placement => removedRailIds.has(placement.railId))) {
+      throw new SchemaCommandError(
+        "INVALID_BOARD_LAYOUT",
+        "Verplaats eerst de modules uit de rijen die je wilt verwijderen.",
+      );
+    }
+    if (layout.placements.some(placement => (
+      placement.startModule + placement.moduleWidth > properties.moduleCapacity
+    ))) {
+      throw new SchemaCommandError(
+        "INVALID_BOARD_LAYOUT",
+        "Verplaats eerst de modules die buiten de nieuwe bordbreedte zouden vallen.",
+      );
+    }
+
+    this.commitTransaction(() => {
+      const rails = layout.rails.slice(0, properties.rowCount).map(rail => ({
+        ...rail,
+        moduleCapacity: properties.moduleCapacity,
+      }));
+      const usedIds = new Set(layout.rails.map(rail => rail.id));
+      let number = rails.length + 1;
+      while (rails.length < properties.rowCount) {
+        while (usedIds.has(`${boardId}-rail-${number}`)) number += 1;
+        const id = `${boardId}-rail-${number}`;
+        usedIds.add(id);
+        rails.push({ id, name: `Rij ${rails.length + 1}`, moduleCapacity: properties.moduleCapacity });
+        number += 1;
+      }
+      this.replaceBoardLayout({ ...layout, rails });
     });
   }
 
