@@ -33,6 +33,8 @@ import { Meerdere_verbruikers } from "./List_Item/Meerdere_verbruikers";
 import { Microgolfoven } from "./List_Item/Microgolfoven";
 import { Motor } from "./List_Item/Motor";
 import { Omvormer } from "./List_Item/Omvormer";
+import { Omschakelaar } from "./List_Item/Omschakelaar";
+import { Omschakelaarpoort } from "./List_Item/Omschakelaarpoort";
 import { Overspanningsbeveiliging } from "./List_Item/Overspanningsbeveiliging";
 import { Lichtcircuit } from "./List_Item/Schakelaars/Lichtcircuit";
 import { Schakelaars } from "./List_Item/Schakelaars/Schakelaars";
@@ -95,6 +97,8 @@ export const ELECTRO_ITEM_CONSTRUCTORS: Readonly<Record<string, new (sourcelist:
     'Microgolfoven': Microgolfoven,
     'Motor': Motor,
     'Omvormer': Omvormer,
+    'Omschakelaar': Omschakelaar,
+    'Omschakelaarpoort': Omschakelaarpoort,
     'Overspanningsbeveiliging': Overspanningsbeveiliging,
     'Schakelaars': Schakelaars,
     'Splitsing': Splitsing,
@@ -116,8 +120,10 @@ export const ELECTRO_ITEM_CONSTRUCTORS: Readonly<Record<string, new (sourcelist:
 };
 
 /** Every user-editable type; only the internal Container is excluded. */
+const INTERNAL_ELECTRO_ITEM_TYPES = new Set(['Container', 'Omschakelaarpoort']);
+
 export const PUBLIC_ELECTRO_ITEM_TYPES: readonly string[] =
-    Object.keys(ELECTRO_ITEM_CONSTRUCTORS).filter((type) => type !== 'Container');
+    Object.keys(ELECTRO_ITEM_CONSTRUCTORS).filter((type) => !INTERNAL_ELECTRO_ITEM_TYPES.has(type));
 
 /*****************************************************************************
   CLASS Hierarchical_List

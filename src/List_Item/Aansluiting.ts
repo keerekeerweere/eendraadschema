@@ -56,7 +56,7 @@ export class Aansluiting extends Electro_Item {
     }
 
     allowedChilds() : Array<string> { // returns an array with the type-names of allowed childs
-        return ["", "Bord", "Kring", "Splitsing"];
+        return ["", "Bord", "Kring", "Splitsing", "Omschakelaar"];
     }
 
     getMaxNumChilds(): number {
