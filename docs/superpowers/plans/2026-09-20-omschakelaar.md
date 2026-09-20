@@ -342,3 +342,162 @@ Expected: no whitespace errors; only intentional feature changes and the user's 
 git add src/List_Item/Omschakelaar.ts src/List_Item/Omschakelaarpoort.ts src/application/Omschakelaar.ts src/application/LegacySchemaStore.ts src/application/LegacySchemaDocumentReader.ts src/application/ConfiguredItemProperties.ts src/application/SchemaValidation.ts src/Hierarchical_List.ts src/test/omschakelaar.test.ts
 git commit -m "fix: complete omschakelaar integration"
 ```
+
+### Task 8: Replace placeholder-port composition with owned branch geometry
+
+**Files:**
+- Modify: `src/List_Item/Omschakelaar.ts`
+- Modify: `src/List_Item/Omschakelaarpoort.ts`
+- Modify: `src/test/omschakelaar.test.ts`
+
+- [ ] **Step 1: Add failing SVG tests for connected horizontal branches**
+
+Create one empty and one wired switch. Parse renderer metadata and assert that `Omschakelaarpoort` emits no visible line, OUT1 is above OUT2, the neutral mechanism has one selector arm, and every contact/stub/circuit endpoint pair uses identical numeric coordinates.
+
+- [ ] **Step 2: Run the focused test and confirm the existing V selector, placeholder lines, and disconnected branches fail**
+
+Run: `npm run test:run -- omschakelaar`
+Expected: FAIL on selector count, duplicate port conductors, and endpoint continuity.
+
+- [ ] **Step 3: Render each connector subtree directly from the switch**
+
+Make `Omschakelaarpoort.toSVG()` return an empty `SVGelement`. In `Omschakelaar.toSVG()`, resolve the two connector items by their `poort` property, render each connector's optional `Kring` subtree independently, position OUT1 first and OUT2 second, and draw exactly one conductor from each contact to the child circuit anchor. Add stable `data-*` coordinate metadata used by tests.
+
+- [ ] **Step 4: Replace the V with one neutral selector arm**
+
+Draw a single centered arm that ends between the two alternative contacts and cannot be read as either output being selected.
+
+- [ ] **Step 5: Run focused tests**
+
+Run: `npm run test:run -- omschakelaar svg`
+Expected: PASS.
+
+### Task 9: Automatic vertical orientation and explicit port insertion anchors
+
+**Files:**
+- Modify: `src/List_Item/Omschakelaar.ts`
+- Modify: `src/application/LegacySchemaDocumentReader.ts`
+- Modify: `src/ui/schematic/SchematicInsertControls.tsx`
+- Modify: `src/test/omschakelaar.test.ts`
+- Modify: `src/test/schematic-insert-controls.test.tsx`
+
+- [ ] **Step 1: Add failing vertical-orientation and insertion tests**
+
+Assert a switch directly below `Kring` renders with `data-orientation="vertical"`, IN below the common contact, OUT1 upper-left, OUT2 upper-right, upright labels, and continuous circuit endpoints. Render insertion controls for an empty switch and assert exactly one button named `Onderdeel na OUT1 toevoegen` and one named `Onderdeel na OUT2 toevoegen`; clicking each must add a `Kring` under the matching connector ID.
+
+- [ ] **Step 2: Run tests and confirm orientation and insertion targeting fail**
+
+Run: `npm run test:run -- omschakelaar schematic-insert-controls`
+Expected: FAIL because the current renderer is always horizontal and relies on generic nested port bounds.
+
+- [ ] **Step 3: Add automatic orientation and explicit anchors**
+
+Infer vertical orientation from the incoming placement context (`Omschakelaar` directly on a `Kring` branch); otherwise render horizontally. Emit one explicit SVG anchor per physical connector with its connector item ID and exact visible stub endpoint. Teach `SchematicInsertControls` to prefer these explicit anchors over generic item bounds while retaining the existing behavior for all other item types.
+
+- [ ] **Step 4: Run focused integration tests**
+
+Run: `npm run test:run -- omschakelaar schematic-insert-controls schematic-render-store`
+Expected: PASS.
+
+### Task 10: Regression verification for the rendering revision
+
+**Files:**
+- Modify only files required to resolve regressions introduced by Tasks 8–9.
+
+- [ ] **Step 1: Run all tests**
+
+Run: `npm test -- --run`
+Expected: all tests pass.
+
+- [ ] **Step 2: Run test typechecking and production build**
+
+Run: `npm run typecheck:test && npm run build`
+Expected: exit 0; only documented legacy non-module warnings remain.
+
+- [ ] **Step 3: Check patch hygiene**
+
+Run: `git diff --check && git status --short`
+Expected: no whitespace errors; the three user-provided screenshots remain untracked.
+
+### Task 11: Preserve wired branches when changing the input side
+
+**Files:**
+- Modify: `src/application/LegacySchemaStore.ts:378-417`
+- Test: `src/test/omschakelaar.test.ts:118-151`
+
+- [ ] **Step 1: Replace the rejection test with a failing preservation test**
+
+Create an omschakelaar with a `Kring` below OUT1, change `parentPort` from `IN` to `OUT1`, and assert that the same connector ID is now labelled `IN`, still owns the same circuit ID, and OUT2 is unchanged. Undo must restore `IN` as parent and OUT1 as the connector label; redo must reapply the exchange without changing IDs.
+
+- [ ] **Step 2: Run the focused test and confirm the wired guard rejects the change**
+
+Run: `npm run test:run -- omschakelaar`
+Expected: FAIL with `SchemaCommandError: Maak beide omschakelaarpoorten leeg...`.
+
+- [ ] **Step 3: Implement the targeted connector identity exchange**
+
+In `updateConfiguredItem`, validate that exactly two unique connector ports equal `remainingOmschakelaarPorts(currentParentPort)`. Resolve the connector whose `poort` equals `nextParentPort`; inside the existing transaction, update the switch properties and rename only that connector to `currentParentPort`. Do not recreate connectors or move their children.
+
+- [ ] **Step 4: Run focused tests and commit**
+
+Run: `npm run test:run -- omschakelaar configured-item-properties`
+Expected: PASS.
+
+```bash
+git add src/application/LegacySchemaStore.ts src/test/omschakelaar.test.ts
+git commit -m "fix: preserve wired branches when remapping switch input"
+```
+
+### Task 12: Align the vertical input conductor and clear its labels
+
+**Files:**
+- Modify: `src/List_Item/Omschakelaar.ts:89-129`
+- Test: `src/test/omschakelaar.test.ts:223-305`
+
+- [ ] **Step 1: Add failing coordinate and label-clearance assertions**
+
+Parse the vertical component and assert the input conductor uses the common contact's `cx` for both `x1` and `x2`. Mark the rating and address text with `data-switch-rating` and `data-switch-address`; assert each text `x` is greater than the conductor x-coordinate and uses `text-anchor="start"`.
+
+- [ ] **Step 2: Run the focused test and confirm the centered rating fails**
+
+Run: `npm run test:run -- omschakelaar`
+Expected: FAIL because the rating currently uses the center x-coordinate with `text-anchor="middle"`.
+
+- [ ] **Step 3: Place vertical metadata to the right of the incoming wire**
+
+Keep `common.x` as the sole x-coordinate for the vertical input line. In vertical layout, set the rating/address x-coordinate to `common.x + 20`, render both with `text-anchor="start"`, add stable data attributes, and expand the right bound using `svgTextWidth` so neither label is clipped. Preserve the existing centered labels in horizontal orientation.
+
+- [ ] **Step 4: Run focused tests and commit**
+
+Run: `npm run test:run -- omschakelaar svg schematic-render-store`
+Expected: PASS.
+
+```bash
+git add src/List_Item/Omschakelaar.ts src/test/omschakelaar.test.ts
+git commit -m "fix: align vertical switch wiring and labels"
+```
+
+### Task 13: Verify the input-remapping revision
+
+**Files:**
+- Modify only files required to resolve regressions introduced by Tasks 11–12.
+
+- [ ] **Step 1: Run all unit and component tests**
+
+Run: `npm run test:run`
+Expected: all tests pass.
+
+- [ ] **Step 2: Run browser tests**
+
+Run: `npm run test:e2e`
+Expected: all Playwright tests pass.
+
+- [ ] **Step 3: Run typechecking and the production build**
+
+Run: `npm run typecheck:test && npm run build`
+Expected: exit 0; only the repository's existing legacy non-module warnings remain.
+
+- [ ] **Step 4: Check patch hygiene and repository state**
+
+Run: `git diff --check && git status --short`
+Expected: no whitespace errors; the three user screenshots and `.superpowers/` remain untracked.
