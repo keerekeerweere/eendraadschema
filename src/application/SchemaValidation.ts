@@ -81,7 +81,7 @@ export function validateSchemaDocument(document: SchemaDocumentReader): readonly
         `Item ${item.id} hoort niet bij een verdeelbord.`));
     }
     if (item.type === "Omschakelaar") {
-      validateOmschakelaar(document, item.id, item.summary.connectionPort, issues);
+      validateOmschakelaar(document, item.id, issues);
     }
   }
 
@@ -91,24 +91,19 @@ export function validateSchemaDocument(document: SchemaDocumentReader): readonly
 function validateOmschakelaar(
   document: SchemaDocumentReader,
   itemId: number,
-  parentPort: string | undefined,
   issues: ValidationIssue[],
 ): void {
   const directChildren = document.getChildren(itemId);
   const connectors = directChildren.filter(child => child.type === "Omschakelaarpoort");
-  if (connectors.length !== 2) {
+  if (connectors.length !== 3) {
     issues.push(issue("error", "OMSCHAKELAAR_PORT_COUNT", undefined, itemId,
-      "Een omschakelaar moet exact twee aansluitpoorten hebben."));
+      "Een omschakelaar moet exact drie aansluitpoorten hebben (OUT1, IN en OUT2)."));
   }
 
   const portNames = connectors.map(connector => connector.summary.connectionPort);
   if (new Set(portNames).size !== portNames.length) {
     issues.push(issue("error", "OMSCHAKELAAR_DUPLICATE_PORT", undefined, itemId,
       "De aansluitpoorten van de omschakelaar moeten uniek zijn."));
-  }
-  if (parentPort !== undefined && portNames.includes(parentPort)) {
-    issues.push(issue("error", "OMSCHAKELAAR_PARENT_PORT_CONFLICT", undefined, itemId,
-      "De poort aan de invoerzijde mag niet ook als aftakpoort voorkomen."));
   }
 
   for (const connector of connectors) {

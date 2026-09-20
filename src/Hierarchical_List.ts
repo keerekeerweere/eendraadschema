@@ -809,6 +809,27 @@ export class Hierarchical_List {
             }
         }
 
+        // Elke omschakelaar heeft altijd een aansluitpoort per positie (OUT1, IN, OUT2). Oudere
+        // documenten hadden er maar twee; de ontbrekende wordt hier aangevuld.
+        for (let i = 0; i<this.length; i++) {
+            if (!this.active[i] || (this.data[i] as Electro_Item).getType() != "Omschakelaar") continue;
+            const present = new Set<string>();
+            for (let j = 0; j<this.length; j++) {
+                if (this.active[j] && this.data[j].parent == this.id[i] && this.data[j].props.type == "Omschakelaarpoort")
+                    present.add(this.data[j].props.poort);
+            }
+            const missing = ["OUT2", "IN", "OUT1"].filter(port => !present.has(port));
+            if (missing.length > 0) {
+                for (const port of missing) {
+                    const connector = this.createItem("Omschakelaarpoort");
+                    connector.props.poort = port;
+                    this.insertChildAfterId(connector, this.id[i]);
+                }
+                this.voegAttributenToeAlsNodigEnReSort();
+                return;
+            }
+        }
+
         // herStoreren van de matrix
 
         this.reSort();

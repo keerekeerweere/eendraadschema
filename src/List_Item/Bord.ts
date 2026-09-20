@@ -2,6 +2,9 @@ import { Electro_Item } from "./Electro_Item";
 import { htmlspecialchars, svgTextWidth } from "../general";
 import { SVGelement } from "../SVGelement";
 
+/** Extra length (in pixels) the busbar can be extended to the right, next to the space it already has on the left. */
+export const BORD_BUSBAR_EXTENSIONS = ["0", "20", "40", "60", "80", "100", "150", "200", "300"];
+
 export class Bord extends Electro_Item {
 
     erBestaatEenBordUpstream() : boolean {
@@ -28,6 +31,11 @@ export class Bord extends Electro_Item {
         if (this.erBestaatEenBordUpstream()) this.props.is_geaard = false; else this.props.is_geaard = true;
         this.props.naam = "";
         this.props.adres = "";
+        this.props.verlenging_rechts = "0";
+    }
+
+    overrideKeys() {
+        if (!BORD_BUSBAR_EXTENSIONS.includes(String(this.props.verlenging_rechts))) this.props.verlenging_rechts = "0";
     }
 
     allowedChilds() : Array<string> { // returns an array with the type-names of allowed childs
@@ -115,6 +123,9 @@ export class Bord extends Electro_Item {
 
         // Indien door het schuiven er niets rechts over blijft, voorzie minstens 10 pixels
         if (mySVG.xright <=10) mySVG.xright = 10;
+
+        // De door de gebruiker gekozen verlenging van de balk naar rechts komt na het links-schuiven, anders wordt ze opgeslorpt
+        mySVG.xright += Number(BORD_BUSBAR_EXTENSIONS.includes(String(this.props.verlenging_rechts)) ? this.props.verlenging_rechts : 0);
 
         // Voorzie voldoende plaats voor de lijn onderaan
         mySVG.ydown = Math.max(mySVG.ydown,1);

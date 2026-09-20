@@ -516,3 +516,16 @@ Two field problems after Tasks 11-13:
 Two detours to remember: removing `parent_port` entirely (fixed roles) was tried and reverted because the incoming wire must be able to attach to `OUT1`; and the maintainer's live document was inspected read-only through the MCP bridge (`Bord -> Kring A -> Omschakelaar`, both connectors empty) to confirm the real structure before implementing.
 
 Verified with: `npm test -- --run`, `npm run typecheck:test`, `npm run build`, plus rendered SVG screenshots for every `parent_port` in both orientations.
+
+### Task 15: Three connectors, extra items above every slot, and a right-hand busbar extension
+
+**Files:**
+- Modify: `src/List_Item/Omschakelaar.ts`, `src/application/Omschakelaar.ts`, `src/application/LegacySchemaStore.ts`, `src/application/SchemaValidation.ts`, `src/Hierarchical_List.ts`
+- Modify: `src/List_Item/Bord.ts`, `src/application/ConfiguredItemProperties.ts`, `src/ui/properties/configured/configuredItemEditorConfig.ts`
+- Test: `src/test/omschakelaar.test.ts`, `src/test/bord-busbar.test.ts`, `src/test/configured-item-properties.test.tsx`, `src/test/configured-item-property-migration.test.ts`
+
+Field feedback: even where the incoming wire enters a slot, that slot must still accept extra items going up. The switch therefore always has three connectors (`OUT1`, `IN`, `OUT2`), each with its own upward branch and insertion anchor. This makes the connector-identity swap of Task 11 unnecessary: `parent_port` is now only the slot where the incoming wire is drawn (property label `Inkomende leiding op poort`), and changing it touches no connectors. Older documents with two connectors are completed by `voegAttributenToeAlsNodigEnReSort`. Validation now expects exactly three connectors and no longer has a parent-port conflict.
+
+Separately, the Bord got a `verlenging_rechts` property (`Balk rechts verlengen (px)`, 0-300) that lengthens the busbar on the right. It is added after the existing shift-left logic, otherwise that logic absorbs it.
+
+Verified with: `npm test -- --run` (387 tests), `npm run typecheck:test`, `npm run build`, and a rendered SVG of the three-branch switch with the incoming wire on `OUT1`.

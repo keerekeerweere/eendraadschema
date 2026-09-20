@@ -2,6 +2,7 @@ import { Electro_Item } from "./Electro_Item";
 import {
   isOmschakelaarPort,
   OMSCHAKELAAR_POLES,
+  OMSCHAKELAAR_SLOT_ORDER,
   OMSCHAKELAAR_RATINGS,
 } from "../application/Omschakelaar";
 import type { OmschakelaarPort } from "../application/Omschakelaar";
@@ -10,11 +11,12 @@ import { SVGelement } from "../SVGelement";
 
 /**
  * The three ports always sit in the same slots, whatever the wiring:
- * left/top = OUT1, middle = IN, right/bottom = OUT2. `parent_port` only
- * chooses which slot the incoming wire (the switch's tree parent) attaches
- * to; the other two slots are the two connector items.
+ * left/top = OUT1, middle = IN, right/bottom = OUT2. Every slot has its own
+ * connector item and always draws its own branch (so an extra item can be
+ * added above any slot). `parent_port` only chooses which slot the incoming
+ * wire (the switch's tree parent) additionally attaches to.
  */
-const SLOT_ORDER: readonly OmschakelaarPort[] = ["OUT1", "IN", "OUT2"];
+const SLOT_ORDER: readonly OmschakelaarPort[] = OMSCHAKELAAR_SLOT_ORDER;
 
 interface Slot {
   readonly port: OmschakelaarPort;
@@ -54,7 +56,7 @@ export class Omschakelaar extends Electro_Item {
   }
 
   getMaxNumChilds(): number {
-    return 2;
+    return 3;
   }
 
   overrideKeys(): void {
@@ -80,9 +82,6 @@ export class Omschakelaar extends Electro_Item {
 
   private getSlots(parentPort: OmschakelaarPort): Slot[] {
     return SLOT_ORDER.map(port => {
-      if (port === parentPort) {
-        return { port, isParent: true, connector: undefined, svg: new SVGelement() };
-      }
       const connector = this.sourcelist.data.find((candidate, index) =>
         this.sourcelist.active[index]
         && candidate.parent === this.id
@@ -91,7 +90,7 @@ export class Omschakelaar extends Electro_Item {
       );
       return {
         port,
-        isParent: false,
+        isParent: port === parentPort,
         connector,
         svg: connector === undefined ? new SVGelement() : this.sourcelist.toSVG(connector.id, "horizontal"),
       };
@@ -107,18 +106,9 @@ export class Omschakelaar extends Electro_Item {
     const [top, middle, bottom] = slots;
     const contactX = 58;
     const commonX = 26;
-    let upperY: number;
-    let centerY: number;
-    let lowerY: number;
-    if (middle.isParent) {
-      upperY = Math.max(22, top.svg.yup);
-      lowerY = upperY + Math.max(38, top.svg.ydown + bottom.svg.yup + 18);
-      centerY = (upperY + lowerY) / 2;
-    } else {
-      upperY = Math.max(22, top.svg.yup);
-      centerY = upperY + Math.max(19, top.svg.ydown + middle.svg.yup + 14);
-      lowerY = centerY + Math.max(19, middle.svg.ydown + bottom.svg.yup + 14);
-    }
+    const upperY = Math.max(22, top.svg.yup);
+    const centerY = upperY + Math.max(19, top.svg.ydown + middle.svg.yup + 14);
+    const lowerY = centerY + Math.max(19, middle.svg.ydown + bottom.svg.yup + 14);
     const rowY: Record<OmschakelaarPort, number> = { OUT1: upperY, IN: centerY, OUT2: lowerY };
     const endpointX = contactX + 30 + Math.max(...slots.map(slot => slot.svg.xleft));
     const labelBottom = lowerY + (address === "" ? 24 : 38);
@@ -168,18 +158,9 @@ export class Omschakelaar extends Electro_Item {
     const endpointY = Math.max(18, ...slots.map(slot => slot.svg.yup));
     const contactY = endpointY + 24;
     const commonY = contactY + 34;
-    let leftX: number;
-    let centerX: number;
-    let rightX: number;
-    if (middle.isParent) {
-      leftX = Math.round(Math.max(34, left.svg.xleft));
-      rightX = Math.round(leftX + Math.max(72, left.svg.xright + right.svg.xleft + 28));
-      centerX = Math.round((leftX + rightX) / 2);
-    } else {
-      leftX = Math.round(Math.max(34, left.svg.xleft));
-      centerX = Math.round(leftX + Math.max(36, left.svg.xright + middle.svg.xleft + 28));
-      rightX = Math.round(centerX + Math.max(36, middle.svg.xright + right.svg.xleft + 28));
-    }
+    const leftX = Math.round(Math.max(34, left.svg.xleft));
+    const centerX = Math.round(leftX + Math.max(36, left.svg.xright + middle.svg.xleft + 28));
+    const rightX = Math.round(centerX + Math.max(36, middle.svg.xright + right.svg.xleft + 28));
     const columnX: Record<OmschakelaarPort, number> = { OUT1: leftX, IN: centerX, OUT2: rightX };
     const parentX = columnX[parentPort];
     // The port label ("IN"/"OUT1"/"OUT2") sits on its own line next to its
@@ -247,9 +228,7 @@ export class Omschakelaar extends Electro_Item {
       const escapedPort = htmlspecialchars(slot.port);
       const contact = layout.contacts[slot.port];
       data += `<circle data-switch-contact="${escapedPort}" cx="${contact.x}" cy="${contact.y}" r="2.5" fill="black" />`;
-      if (!slot.isParent) {
-        data += line(`data-output-conductor="${escapedPort}"`, contact, layout.ends[slot.port]);
-      }
+      data += line(`data-output-conductor="${escapedPort}"`, contact, layout.ends[slot.port]);
     }
 
     data += `<line data-selector-arm="true" x1="${layout.arm.from.x}" y1="${layout.arm.from.y}" x2="${layout.arm.to.x}" y2="${layout.arm.to.y}" stroke="black" />`;
@@ -266,7 +245,6 @@ export class Omschakelaar extends Electro_Item {
     }
 
     for (const slot of slots) {
-      if (slot.isParent) continue;
       const end = layout.ends[slot.port];
       const branchX = end.x - slot.svg.xleft;
       const branchY = end.y - slot.svg.yup;
@@ -278,7 +256,7 @@ export class Omschakelaar extends Electro_Item {
     }
 
     for (const slot of slots) {
-      if (slot.isParent || slot.connector === undefined) continue;
+      if (slot.connector === undefined) continue;
       const end = layout.ends[slot.port];
       data += `<g data-schema-item-id="${slot.connector.id}" data-explicit-port-anchor="${htmlspecialchars(slot.port)}" data-schema-anchor-x="${end.x}" data-schema-anchor-y="${end.y}" data-schema-end-x="${end.x}" data-schema-width="0" data-schema-height="0"></g>`;
     }

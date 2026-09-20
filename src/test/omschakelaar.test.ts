@@ -57,7 +57,7 @@ describe("Omschakelaar", () => {
     expect(parent.allowedChilds()).toContain("Omschakelaar");
   });
 
-  it("creates both physical connector ports in the same undoable revision", () => {
+  it("creates all three connector ports in the same undoable revision", () => {
     const { store, circuitId } = createCircuitStore();
     const revisionBefore = store.getSnapshot().revision;
 
@@ -67,10 +67,11 @@ describe("Omschakelaar", () => {
     expect(connectors.map(connector => connector.type)).toEqual([
       "Omschakelaarpoort",
       "Omschakelaarpoort",
+      "Omschakelaarpoort",
     ]);
     expect(connectors.map(connector => (
       store.getLegacyDocument().getElectroItemById(connector.id)?.props.poort
-    ))).toEqual(["OUT1", "OUT2"]);
+    ))).toEqual(["OUT1", "IN", "OUT2"]);
     expect(store.getSnapshot().revision).toBe(revisionBefore + 1);
 
     store.commands.undo();
@@ -84,7 +85,7 @@ describe("Omschakelaar", () => {
     const connectors = store.getSnapshot().document.getChildren(switchId);
     const firstPort = connectors[0];
 
-    expect(connectors.map(connector => connector.label)).toEqual(["OUT1", "OUT2"]);
+    expect(connectors.map(connector => connector.label)).toEqual(["OUT1", "IN", "OUT2"]);
     expect(firstPort.capabilities).toMatchObject({
       canAddChild: true,
       canInsertBefore: false,
@@ -129,47 +130,62 @@ describe("Omschakelaar", () => {
       parentPort: "OUT1",
       address: "Bypass",
     });
+    // Moving the incoming wire never renames or reorders the connectors.
     expect(store.getSnapshot().document.getChildren(switchId).map(port => port.label)).toEqual([
+      "OUT1",
       "IN",
       "OUT2",
     ]);
   });
 
-  it("preserves a wired connector subtree when it becomes the parent-side port", () => {
+  it("keeps wired connectors untouched when the incoming-wire port changes", () => {
     const { store, circuitId } = createCircuitStore();
     const switchId = store.commands.addItem(circuitId, "Omschakelaar");
-    const [out1Before, out2Before] = store.getSnapshot().document.getChildren(switchId);
-    const branchId = store.commands.addItem(out1Before.id, "Kring");
+    const before = store.getSnapshot().document.getChildren(switchId);
+    const branchId = store.commands.addItem(before[0].id, "Kring");
 
-    store.commands.updateConfiguredItem(switchId, {
-      parentPort: "OUT1",
-    });
+    store.commands.updateConfiguredItem(switchId, { parentPort: "OUT1" });
 
-    let connectors = store.getSnapshot().document.getChildren(switchId);
-    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("OUT1");
-    expect(connectors.map(port => [port.id, port.label])).toEqual([
-      [out1Before.id, "IN"],
-      [out2Before.id, "OUT2"],
-    ]);
-    expect(store.getSnapshot().document.getChildren(out1Before.id).map(child => child.id)).toEqual([branchId]);
+    const after = store.getSnapshot().document.getChildren(switchId);
+    expect(after.map(port => [port.id, port.label])).toEqual(before.map(port => [port.id, port.label]));
+    expect(store.getSnapshot().document.getChildren(before[0].id).map(child => child.id)).toEqual([branchId]);
 
     store.commands.undo();
-    connectors = store.getSnapshot().document.getChildren(switchId);
     expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("IN");
-    expect(connectors.map(port => [port.id, port.label])).toEqual([
-      [out1Before.id, "OUT1"],
-      [out2Before.id, "OUT2"],
-    ]);
-    expect(store.getSnapshot().document.getChildren(out1Before.id).map(child => child.id)).toEqual([branchId]);
+    expect(store.getSnapshot().document.getChildren(before[0].id).map(child => child.id)).toEqual([branchId]);
+  });
 
-    store.commands.redo();
-    connectors = store.getSnapshot().document.getChildren(switchId);
-    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("OUT1");
-    expect(connectors.map(port => [port.id, port.label])).toEqual([
-      [out1Before.id, "IN"],
-      [out2Before.id, "OUT2"],
-    ]);
-    expect(store.getSnapshot().document.getChildren(out1Before.id).map(child => child.id)).toEqual([branchId]);
+  it.each(["OUT1", "IN", "OUT2"])(
+    "still allows an extra circuit above the connector where the incoming wire enters (%s)",
+    (parentPort) => {
+      const { store, circuitId } = createCircuitStore();
+      const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+      store.commands.updateConfiguredItem(switchId, { parentPort });
+      const connector = store.getSnapshot().document.getChildren(switchId)
+        .find(port => port.label === parentPort)!;
+
+      expect(connector.capabilities.canAddChild).toBe(true);
+      const branchId = store.commands.addItem(connector.id, "Kring");
+      expect(store.getSnapshot().document.getItem(branchId)?.parentId).toBe(connector.id);
+    },
+  );
+
+  it("adds the missing connector to a document saved with only two", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    const structure = store.getLegacyDocument();
+    const inConnector = store.getSnapshot().document.getChildren(switchId).find(port => port.label === "IN")!;
+    structure.deleteById(inConnector.id);
+    expect(structure.data.filter(item => item.parent === switchId && item.props.type === "Omschakelaarpoort"))
+      .toHaveLength(2);
+
+    structure.voegAttributenToeAlsNodigEnReSort();
+
+    const ports = structure.data
+      .filter(item => item.parent === switchId && item.props.type === "Omschakelaarpoort")
+      .map(item => item.props.poort)
+      .sort();
+    expect(ports).toEqual(["IN", "OUT1", "OUT2"]);
   });
 
   it.each([
@@ -200,21 +216,16 @@ describe("Omschakelaar", () => {
     ]));
   });
 
-  it("reports a missing connector and a parent-port conflict", () => {
+  it("reports a missing connector", () => {
     const { store, circuitId } = createCircuitStore();
     const switchId = store.commands.addItem(circuitId, "Omschakelaar");
     const structure = store.getLegacyDocument();
-    const [firstPort, secondPort] = store.getSnapshot().document.getChildren(switchId);
+    const [, , lastPort] = store.getSnapshot().document.getChildren(switchId);
 
-    structure.deleteById(secondPort.id);
-    structure.getElectroItemById(switchId)!.props.parent_port = "OUT1";
-    structure.getElectroItemById(firstPort.id)!.props.poort = "OUT1";
+    structure.deleteById(lastPort.id);
 
     const issues = validateSchemaDocument(new LegacySchemaDocumentReader(structure));
-    expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
-      "OMSCHAKELAAR_PORT_COUNT",
-      "OMSCHAKELAAR_PARENT_PORT_CONFLICT",
-    ]));
+    expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining(["OMSCHAKELAAR_PORT_COUNT"]));
   });
 
   it("round trips switch properties, port identities, wiring, and stable IDs", () => {
@@ -301,11 +312,14 @@ describe("Omschakelaar", () => {
       expect(input.getAttribute("data-input-conductor")).toBe(parentPort);
       expect(Number(input.getAttribute("x1"))).toBe(x(parentPort));
       expect(Number(input.getAttribute("x1"))).toBe(Number(cableLine.getAttribute("x1")));
-      expect(wrapper.querySelector(`[data-output-conductor="${parentPort}"]`)).toBeNull();
+      // Every slot, including the one the incoming wire enters, keeps its own upward branch and insert anchor.
+      for (const port of ["OUT1", "IN", "OUT2"]) {
+        expect(wrapper.querySelector(`[data-output-conductor="${port}"]`)).not.toBeNull();
+      }
       const anchored = Array.from(wrapper.querySelectorAll("[data-explicit-port-anchor]"))
         .map(anchor => anchor.getAttribute("data-explicit-port-anchor"))
         .sort();
-      expect(anchored).toEqual(["IN", "OUT1", "OUT2"].filter(port => port !== parentPort).sort());
+      expect(anchored).toEqual(["IN", "OUT1", "OUT2"]);
     },
   );
 

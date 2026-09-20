@@ -93,6 +93,7 @@ export const CONFIGURED_ITEM_PROPERTY_SCHEMAS: Readonly<Record<string, Configure
   Bord: schema({
     name: { legacyKey: "naam", kind: "text", defaultValue: "" },
     grounded: { legacyKey: "is_geaard", kind: "boolean", defaultValue: false },
+    busbarExtensionRight: { legacyKey: "verlenging_rechts", kind: "select", options: ["0", "20", "40", "60", "80", "100", "150", "200", "300"], defaultValue: "0" },
   }),
   Domotica: numbered({
     text: { legacyKey: "tekst", kind: "text", defaultValue: "Domotica" },

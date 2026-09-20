@@ -16,7 +16,9 @@ The supplied Sontheimer ULO40 drawing in `feature/UkH1E4L0bRwtegdscJgp6F11.avif`
 
 The three ports have **fixed positions and labels**: `OUT1` is always the left (vertical) or top (horizontal) slot, `IN` is always the middle slot, and `OUT2` is always the right or bottom slot. `IN` is only a name for the middle slot; it does not mean "the incoming supply".
 
-Because the existing electrical document is a tree, exactly one of the three slots is where the switch attaches to the item above it (the incoming wire). The user selects that slot through `parent_port`. The other two slots are represented by required internal `Omschakelaarpoort` connector items, each identifying the slot it occupies explicitly rather than deriving it from child order. Changing `parent_port` moves the incoming wire to another slot; it never moves the labels or slot positions.
+The switch always has **three** required internal `Omschakelaarpoort` connector items, one per slot, with fixed identities `OUT1`, `IN` and `OUT2` (child order `OUT1`, `IN`, `OUT2`). Each connector accepts one `Kring` going up, so an extra item can always be added above any slot.
+
+Because the existing electrical document is a tree, the switch is also attached to the item above it (the incoming wire). The user selects which slot that wire enters through `parent_port`. This only changes where the incoming wire is drawn; it never renames, moves or reorders connectors, and it does not remove that slot's own upward branch. Documents saved with only two connectors (an earlier revision of this feature) get the missing connector added when they are loaded or next edited.
 
 An `Omschakelaarpoort`:
 
@@ -26,8 +28,6 @@ An `Omschakelaarpoort`:
 - cannot be added independently;
 - cannot be deleted, reordered, duplicated, or changed to another type;
 - is excluded from public item-type choices and situation-plan symbols.
-
-The parent-side port can be changed with empty or wired connectors. The connector representing the requested new parent becomes the connector for the previous parent port, preserving its item ID and complete circuit subtree. This explicit exchange keeps all three physical port identities represented exactly once without deleting or detaching wiring.
 
 `Omschakelaar` is allowed wherever `Splitsing` is currently accepted. Its connector ports accept a `Kring`, allowing the component to represent grid selection, backup selection, inverter bypass, and similar layouts without assigning an energy-flow direction to the names `IN` and `OUT`.
 
@@ -39,27 +39,25 @@ The React property inspector exposes:
 | --- | --- | --- | --- |
 | Number of switched poles | `aantal_polen` | `2`, `4` | `4` |
 | Nominal current | `amperage` | `16`, `25`, `32`, `40`, `63`, `80`, `100` | `63` |
-| Port on the parent side | `parent_port` | `IN`, `OUT1`, `OUT2` | `IN` |
+| Slot where the incoming wire enters | `parent_port` | `IN`, `OUT1`, `OUT2` | `IN` |
 | Address/description | `adres` | free text | empty |
 
 `2P` and `4P` describe how many conductors the mechanism switches together. They are independent of the three physical connection ports.
 
-The labels shown to users are Belgian Dutch: `Aantal polen`, `Nominale stroom`, `Poort aan invoerzijde`, and `Adres/omschrijving`.
+The labels shown to users are Belgian Dutch: `Aantal polen`, `Nominale stroom`, `Inkomende leiding op poort`, and `Adres/omschrijving`.
 
 ## Creation and command behavior
 
-Adding an `Omschakelaar` creates the switch and its two required connector items in one schema transaction. The entire addition is one undo step. Redo restores the same topology and properties.
+Adding an `Omschakelaar` creates the switch and its three required connector items in one schema transaction. The entire addition is one undo step. Redo restores the same topology and properties.
 
 Application commands enforce the component invariant:
 
-- exactly two direct `Omschakelaarpoort` children;
-- the connector port identities are the two values other than `parent_port`;
+- exactly three direct `Omschakelaarpoort` children with the identities `OUT1`, `IN` and `OUT2`;
 - connector identities are unique;
 - each connector has no more than one `Kring` child;
-- connector structural operations are rejected with a clear Dutch error message;
-- changing `parent_port` preserves both connector subtrees and their stable IDs.
+- connector structural operations are rejected with a clear Dutch error message.
 
-Changing the parent-side port performs a targeted identity exchange. The connector whose port equals the requested new parent is renamed to the previous parent port; the other connector remains unchanged. For example, changing `IN` to `OUT1` renames the existing `OUT1` connector to `IN`, while `OUT2` remains `OUT2`. Any `Kring` and descendants below the renamed connector remain attached to the same connector ID. The switch property and connector identity update happen in one transaction and one undo step.
+Changing `parent_port` is a plain property update (one undo step); connectors and their circuits are untouched.
 
 The switch and connectors continue to use the existing `SchemaCommands` boundary. React does not mutate the legacy hierarchy or property bags directly.
 
@@ -73,9 +71,9 @@ The feature does not introduce a general graph or cross-reference model. Connect
 
 ## Hierarchy and property UI
 
-The hierarchy shows the switch as `Omschakelaar` and its two children by their physical labels, for example `OUT1` and `OUT2` when `IN` is on the parent side. Connector rows permit adding or editing their one `Kring` child but do not expose normal structural actions.
+The hierarchy shows the switch as `Omschakelaar` and its three children by their fixed labels `OUT1`, `IN` and `OUT2`. Connector rows permit adding or editing their one `Kring` child but do not expose normal structural actions.
 
-The switch uses the configured-item property editor. Select controls constrain poles, current, and parent-side port to the allowed values. Failed changes display the existing command-error feedback and leave the document unchanged.
+The switch uses the configured-item property editor. Select controls constrain poles, current, and the incoming-wire slot to the allowed values. Failed changes display the existing command-error feedback and leave the document unchanged.
 
 ## SVG rendering
 
@@ -94,7 +92,9 @@ Orientation is automatic and follows the incoming conductor; there is no orienta
 - in horizontal placement the incoming wire enters from the left, and the slots are `OUT1` (top), `IN` (middle), `OUT2` (bottom);
 - on a vertical `Kring` the incoming wire enters from below, and the slots are `OUT1` (left), `IN` (middle), `OUT2` (right).
 
-The incoming wire attaches to the slot chosen by `parent_port` (default `IN`): in vertical orientation it runs straight up to that slot's contact, in horizontal orientation it enters that slot's row. The two remaining slots draw their branch conductors (going up in vertical orientation, right in horizontal orientation) to their connector's `Kring`. When `IN` is not the incoming slot it therefore draws a normal branch like `OUT1`/`OUT2`, while the selector arm stays on the `IN` contact.
+The incoming wire attaches to the slot chosen by `parent_port` (default `IN`): in vertical orientation it runs straight up to that slot's contact, in horizontal orientation it enters that slot's row. Every slot, including the incoming one, also draws its own branch conductor (going up in vertical orientation, right in horizontal orientation) to its connector's `Kring`, with an insertion anchor. The incoming wire and that slot's branch therefore run through the same contact. The selector arm stays on the `IN` contact.
+
+The three columns/rows are laid out from the widths/heights of all three branch subtrees, so a wired `IN` branch never overlaps its neighbours.
 
 Labels and rating text remain upright in either orientation. In vertical orientation, the incoming conductor stays exactly on the common contact's center axis. The rating and optional address are placed to the right of the incoming conductor, on lines below the `IN` label, so text never covers the wire or collides with a port label. The switch lays out the two connector subtrees itself rather than passing the connector nodes through the generic vertical compositor. Each attached `Kring` starts at its physical port; an empty port ends in one explicit insertion anchor at the visible conductor endpoint. These anchors identify the corresponding connector item so schematic insertion adds the circuit below the correct physical connector hierarchy node.
 
