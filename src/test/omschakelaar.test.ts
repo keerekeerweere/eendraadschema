@@ -33,6 +33,7 @@ describe("Omschakelaar", () => {
     expect(item.props).toMatchObject({
       aantal_polen: "4",
       amperage: "63",
+      parent_port: "IN",
       adres: "",
     });
     expect(port.getType()).toBe("Omschakelaarpoort");
@@ -110,6 +111,7 @@ describe("Omschakelaar", () => {
       values: {
         poleCount: "4",
         amperage: "63",
+        parentPort: "IN",
         address: "",
       },
     });
@@ -117,39 +119,63 @@ describe("Omschakelaar", () => {
     store.commands.updateConfiguredItem(switchId, {
       poleCount: "2",
       amperage: "100",
+      parentPort: "OUT1",
       address: "Bypass",
     });
 
     expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values).toMatchObject({
       poleCount: "2",
       amperage: "100",
+      parentPort: "OUT1",
       address: "Bypass",
     });
+    expect(store.getSnapshot().document.getChildren(switchId).map(port => port.label)).toEqual([
+      "IN",
+      "OUT2",
+    ]);
   });
 
-  it("keeps connector identities fixed regardless of which one is wired", () => {
+  it("preserves a wired connector subtree when it becomes the parent-side port", () => {
     const { store, circuitId } = createCircuitStore();
     const switchId = store.commands.addItem(circuitId, "Omschakelaar");
-    const [out1, out2] = store.getSnapshot().document.getChildren(switchId);
-    const branchId = store.commands.addItem(out1.id, "Kring");
+    const [out1Before, out2Before] = store.getSnapshot().document.getChildren(switchId);
+    const branchId = store.commands.addItem(out1Before.id, "Kring");
 
-    // There is no property to reassign which physical connector the parent
-    // side attaches to: the switch's own tree parent is always drawn/labelled
-    // "IN", and its two connectors are always "OUT1" and "OUT2" in a fixed
-    // order, whichever one ends up wired.
-    expectInvalidChange(() => store.commands.updateConfiguredItem(switchId, { parentPort: "OUT1" } as never));
+    store.commands.updateConfiguredItem(switchId, {
+      parentPort: "OUT1",
+    });
 
-    const connectors = store.getSnapshot().document.getChildren(switchId);
+    let connectors = store.getSnapshot().document.getChildren(switchId);
+    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("OUT1");
     expect(connectors.map(port => [port.id, port.label])).toEqual([
-      [out1.id, "OUT1"],
-      [out2.id, "OUT2"],
+      [out1Before.id, "IN"],
+      [out2Before.id, "OUT2"],
     ]);
-    expect(store.getSnapshot().document.getChildren(out1.id).map(child => child.id)).toEqual([branchId]);
+    expect(store.getSnapshot().document.getChildren(out1Before.id).map(child => child.id)).toEqual([branchId]);
+
+    store.commands.undo();
+    connectors = store.getSnapshot().document.getChildren(switchId);
+    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("IN");
+    expect(connectors.map(port => [port.id, port.label])).toEqual([
+      [out1Before.id, "OUT1"],
+      [out2Before.id, "OUT2"],
+    ]);
+    expect(store.getSnapshot().document.getChildren(out1Before.id).map(child => child.id)).toEqual([branchId]);
+
+    store.commands.redo();
+    connectors = store.getSnapshot().document.getChildren(switchId);
+    expect(store.getSnapshot().properties.getConfiguredItem(switchId)?.values.parentPort).toBe("OUT1");
+    expect(connectors.map(port => [port.id, port.label])).toEqual([
+      [out1Before.id, "IN"],
+      [out2Before.id, "OUT2"],
+    ]);
+    expect(store.getSnapshot().document.getChildren(out1Before.id).map(child => child.id)).toEqual([branchId]);
   });
 
   it.each([
     ["poleCount", "3"],
     ["amperage", "50"],
+    ["parentPort", "GRID"],
   ])("rejects unsupported %s values", (key, value) => {
     const { store, circuitId } = createCircuitStore();
     const switchId = store.commands.addItem(circuitId, "Omschakelaar");
@@ -174,17 +200,20 @@ describe("Omschakelaar", () => {
     ]));
   });
 
-  it("reports a missing connector", () => {
+  it("reports a missing connector and a parent-port conflict", () => {
     const { store, circuitId } = createCircuitStore();
     const switchId = store.commands.addItem(circuitId, "Omschakelaar");
     const structure = store.getLegacyDocument();
-    const [, secondPort] = store.getSnapshot().document.getChildren(switchId);
+    const [firstPort, secondPort] = store.getSnapshot().document.getChildren(switchId);
 
     structure.deleteById(secondPort.id);
+    structure.getElectroItemById(switchId)!.props.parent_port = "OUT1";
+    structure.getElectroItemById(firstPort.id)!.props.poort = "OUT1";
 
     const issues = validateSchemaDocument(new LegacySchemaDocumentReader(structure));
     expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
       "OMSCHAKELAAR_PORT_COUNT",
+      "OMSCHAKELAAR_PARENT_PORT_CONFLICT",
     ]));
   });
 
@@ -205,6 +234,7 @@ describe("Omschakelaar", () => {
     expect(restoredStore.getSnapshot().properties.getConfiguredItem(switchId)?.values).toMatchObject({
       poleCount: "2",
       amperage: "80",
+      parentPort: "IN",
       address: "Victron bypass",
     });
     expect(restoredStore.getSnapshot().document.getChildren(switchId).map(port => port.id)).toEqual(portIds);
@@ -244,52 +274,6 @@ describe("Omschakelaar", () => {
     expect(svg.data).not.toContain("Bypass <veilig>");
     expect(svg.xleft + svg.xright).toBeGreaterThan(0);
     expect(svg.yup + svg.ydown).toBeGreaterThan(0);
-  });
-
-  it("keeps IN centered between a fixed OUT1 (left) and OUT2 (right) in vertical mode", () => {
-    const { store, circuitId } = createCircuitStore();
-    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
-    const [out1Port, out2Port] = store.getSnapshot().document.getChildren(switchId);
-    // Wire only OUT2: with no parent-side port to choose, the layout must
-    // stay identical to the unwired case, since connector identity no longer
-    // depends on which side happens to carry an existing branch.
-    store.commands.addItem(out2Port.id, "Kring");
-
-    const document = new DOMParser().parseFromString(
-      store.getLegacyDocument().toSVG(0, "horizontal").data,
-      "image/svg+xml",
-    );
-    const component = document.querySelector('[data-component="omschakelaar"]')!;
-    const inContact = component.querySelector('[data-switch-contact="IN"]')!;
-    const out1Contact = component.querySelector('[data-switch-contact="OUT1"]')!;
-    const out2Contact = component.querySelector('[data-switch-contact="OUT2"]')!;
-
-    expect(Number(out1Contact.getAttribute("cx"))).toBeLessThan(Number(out2Contact.getAttribute("cx")));
-    expect(Number(inContact.getAttribute("cx"))).toBe(
-      (Number(out1Contact.getAttribute("cx")) + Number(out2Contact.getAttribute("cx"))) / 2,
-    );
-    expect(component.querySelector('[data-explicit-port-anchor="OUT1"]')?.getAttribute("data-schema-item-id"))
-      .toBe(String(out1Port.id));
-  });
-
-  it("keeps IN centered between a fixed OUT1 (top) and OUT2 (bottom) in horizontal mode", () => {
-    const structure = new Hierarchical_List();
-    const connection = structure.addItem("Aansluiting");
-    const store = new LegacySchemaStore(structure);
-    const switchId = store.commands.addItem(connection.id, "Omschakelaar");
-    const document = new DOMParser().parseFromString(
-      store.getLegacyDocument().toSVG(0, "horizontal").data,
-      "image/svg+xml",
-    );
-    const component = document.querySelector('[data-component="omschakelaar"]')!;
-    const inContact = component.querySelector('[data-switch-contact="IN"]')!;
-    const out1Contact = component.querySelector('[data-switch-contact="OUT1"]')!;
-    const out2Contact = component.querySelector('[data-switch-contact="OUT2"]')!;
-
-    expect(Number(out1Contact.getAttribute("cy"))).toBeLessThan(Number(out2Contact.getAttribute("cy")));
-    expect(Number(inContact.getAttribute("cy"))).toBe(
-      (Number(out1Contact.getAttribute("cy")) + Number(out2Contact.getAttribute("cy"))) / 2,
-    );
   });
 
   it("keeps the port label clear of the rating/address text below it", () => {

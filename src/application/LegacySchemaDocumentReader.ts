@@ -21,7 +21,13 @@ function getSummary(item: Electro_Item): HierarchyItemSummary {
     number: nonEmptyString(item.props.nr),
     address: nonEmptyString(item.props.adres),
     text: nonEmptyString(item.getType() === "Omschakelaarpoort" ? item.props.poort : item.props.tekst),
-    connectionPort: nonEmptyString(item.getType() === "Omschakelaarpoort" ? item.props.poort : undefined),
+    connectionPort: nonEmptyString(
+      item.getType() === "Omschakelaar"
+        ? item.props.parent_port
+        : item.getType() === "Omschakelaarpoort"
+          ? item.props.poort
+          : undefined,
+    ),
   });
 }
 

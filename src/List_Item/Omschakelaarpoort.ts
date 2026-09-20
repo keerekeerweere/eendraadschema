@@ -1,5 +1,5 @@
 import { Electro_Item } from "./Electro_Item";
-import { isOmschakelaarConnectorPort } from "../application/Omschakelaar";
+import { isOmschakelaarPort } from "../application/Omschakelaar";
 import { SVGelement } from "../SVGelement";
 
 export class Omschakelaarpoort extends Electro_Item {
@@ -18,7 +18,7 @@ export class Omschakelaarpoort extends Electro_Item {
   }
 
   overrideKeys(): void {
-    if (!isOmschakelaarConnectorPort(this.props.poort)) this.props.poort = "OUT1";
+    if (!isOmschakelaarPort(this.props.poort)) this.props.poort = "OUT1";
   }
 
   toSVG(): SVGelement {

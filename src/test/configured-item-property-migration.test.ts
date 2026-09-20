@@ -9,6 +9,10 @@ import { SchemaCommandError } from "../application/SchemaStore";
 import { Hierarchical_List } from "../Hierarchical_List";
 import { structureFromJson } from "../legacy/persistence/EdsCodec";
 import { SVGSymbols } from "../SVGSymbols";
+import {
+  isOmschakelaarPort,
+  remainingOmschakelaarPorts,
+} from "../application/Omschakelaar";
 
 function createDocument(type: string): { structure: Hierarchical_List; itemId: number } {
   const structure = new Hierarchical_List();
@@ -61,6 +65,14 @@ describe("React configured-item property compatibility", () => {
     }
     Object.assign(legacyItem.props, legacyChanges);
     legacyItem.normalizeProperties();
+    if (type === "Omschakelaar" && isOmschakelaarPort(legacyItem.props.parent_port)) {
+      const portNames = remainingOmschakelaarPorts(legacyItem.props.parent_port);
+      legacyDocument.data
+        .filter(item => item.parent === legacyItem.id && item.props.type === "Omschakelaarpoort")
+        .forEach((item, index) => {
+          item.props.poort = portNames[index];
+        });
+    }
     legacyDocument.voegAttributenToeAlsNodigEnReSort();
     legacyDocument.reNumber(false);
 
