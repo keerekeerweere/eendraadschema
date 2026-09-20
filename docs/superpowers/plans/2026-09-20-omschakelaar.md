@@ -501,3 +501,30 @@ Expected: exit 0; only the repository's existing legacy non-module warnings rema
 
 Run: `git diff --check && git status --short`
 Expected: no whitespace errors; the three user screenshots and `.superpowers/` remain untracked.
+
+### Task 14: Fixed port roles and label-collision fix
+
+**Files:**
+- Modify: `src/List_Item/Omschakelaar.ts`
+- Modify: `src/List_Item/Omschakelaarpoort.ts`
+- Modify: `src/application/Omschakelaar.ts`
+- Modify: `src/application/LegacySchemaStore.ts`
+- Modify: `src/application/ConfiguredItemProperties.ts`
+- Modify: `src/application/LegacySchemaDocumentReader.ts`
+- Modify: `src/application/SchemaValidation.ts`
+- Modify: `src/ui/properties/configured/configuredItemEditorConfig.ts`
+- Modify: `src/test/omschakelaar.test.ts`, `src/test/configured-item-properties.test.tsx`, `src/test/configured-item-property-migration.test.ts`
+
+Field feedback after Tasks 11–13 shipped: reassigning which port sat on the
+parent side via `parent_port` (a connector-identity swap) was confusing —
+the same physical drawing position could show different port text depending
+on the dropdown. `parent_port` and the swap mechanism (Task 11) are removed
+entirely. `IN` is now always the switch's structural parent connector
+(wherever it was inserted, centered between the two alternatives in both
+orientations); `OUT1`/`OUT2` are always the first/second `Omschakelaarpoort`
+child, in that fixed order, regardless of which one is wired. Separately,
+the rating/pole label (`63A 4P`) was overlapping the `IN`/`OUT` port label
+in vertical orientation; it now renders one text line below the port label
+instead of sharing its row.
+
+Verified with: `npm test -- --run`, `npm run typecheck:test`, `npm run build`.

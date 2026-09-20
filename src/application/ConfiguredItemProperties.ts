@@ -1,6 +1,5 @@
 import {
   OMSCHAKELAAR_POLES,
-  OMSCHAKELAAR_PORTS,
   OMSCHAKELAAR_RATINGS,
 } from "./Omschakelaar";
 
@@ -150,7 +149,6 @@ export const CONFIGURED_ITEM_PROPERTY_SCHEMAS: Readonly<Record<string, Configure
   Omschakelaar: schema({
     poleCount: { legacyKey: "aantal_polen", kind: "select", options: OMSCHAKELAAR_POLES, defaultValue: "4" },
     amperage: { legacyKey: "amperage", kind: "select", options: OMSCHAKELAAR_RATINGS, defaultValue: "63" },
-    parentPort: { legacyKey: "parent_port", kind: "select", options: OMSCHAKELAAR_PORTS, defaultValue: "IN" },
     address: { legacyKey: "adres", kind: "text", defaultValue: "" },
   }),
   Schakelaars: numbered({

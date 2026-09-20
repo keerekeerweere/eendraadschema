@@ -18,7 +18,7 @@ import { validateAndMapLightPointChanges } from "./LightPointPropertyValidation"
 import { configuredItemTypes, type ConfiguredItemPropertyChanges } from "./ConfiguredItemProperties";
 import { freezeBoardLayout, type BoardLayout } from "../domain/BoardLayout";
 import { validateAndMapConfiguredItemChanges } from "./ConfiguredItemPropertyValidation";
-import { isOmschakelaarPort, remainingOmschakelaarPorts } from "./Omschakelaar";
+import { OMSCHAKELAAR_CONNECTOR_PORTS } from "./Omschakelaar";
 import { LegacySchemaDocumentReader } from "./LegacySchemaDocumentReader";
 import { LegacySchemaPropertyReader } from "./LegacySchemaPropertyReader";
 import { validateSchemaDocument } from "./SchemaValidation";
@@ -148,7 +148,7 @@ export class LegacySchemaStore implements SchemaStore {
       }
 
       if (item.getType() === "Omschakelaar") {
-        for (const poort of [...remainingOmschakelaarPorts(item.props.parent_port)].reverse()) {
+        for (const poort of [...OMSCHAKELAAR_CONNECTOR_PORTS].reverse()) {
           const connector = this.structure.createItem("Omschakelaarpoort");
           connector.props.poort = poort;
           this.structure.insertChildAfterId(connector, item.id);
@@ -381,39 +381,6 @@ export class LegacySchemaStore implements SchemaStore {
     }
     const legacyChanges = validateAndMapConfiguredItemChanges(type, changes);
     if (Object.keys(legacyChanges).length === 0) return;
-    const nextParentPort = legacyChanges.parent_port;
-    if (
-      type === "Omschakelaar"
-      && isOmschakelaarPort(nextParentPort)
-      && nextParentPort !== item.props.parent_port
-    ) {
-      const currentParentPort = item.props.parent_port;
-      const connectors = (this.structure.data as Electro_Item[]).filter((candidate, index) => (
-        this.structure.active[index]
-        && candidate.parent === item.id
-        && candidate.getType() === "Omschakelaarpoort"
-      ));
-      const expectedConnectorPorts = isOmschakelaarPort(currentParentPort)
-        ? remainingOmschakelaarPorts(currentParentPort)
-        : [];
-      const actualConnectorPorts = connectors.map(connector => connector.props.poort);
-      const hasValidTopology = connectors.length === 2
-        && new Set(actualConnectorPorts).size === 2
-        && expectedConnectorPorts.every(port => actualConnectorPorts.includes(port));
-      const connectorBecomingParent = connectors.find(connector => connector.props.poort === nextParentPort);
-      if (!hasValidTopology || connectorBecomingParent === undefined) {
-        throw new SchemaCommandError(
-          "INVALID_CHANGE",
-          "De omschakelaar heeft niet exact twee geldige aansluitpoorten.",
-        );
-      }
-      this.commitTransaction(() => {
-        for (const [key, value] of Object.entries(legacyChanges)) item.props[key] = value;
-        item.normalizeProperties();
-        connectorBecomingParent.props.poort = currentParentPort;
-      });
-      return;
-    }
     this.updateItem(itemId, legacyChanges);
   }
 
