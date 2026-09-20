@@ -260,6 +260,7 @@ describe("Omschakelaar", () => {
     const address = component?.querySelector('[data-switch-address]');
     expect(inputConductor?.getAttribute("x1")).toBe(inputContact?.getAttribute("cx"));
     expect(inputConductor?.getAttribute("x2")).toBe(inputContact?.getAttribute("cx"));
+    expect(inputConductor?.getAttribute("stroke-linecap")).toBe("round");
     expect(Number(rating?.getAttribute("x"))).toBeGreaterThan(Number(inputConductor?.getAttribute("x1")));
     expect(Number(address?.getAttribute("x"))).toBeGreaterThan(Number(inputConductor?.getAttribute("x1")));
     expect(rating?.getAttribute("text-anchor")).toBe("start");
@@ -306,6 +307,7 @@ describe("Omschakelaar", () => {
       const anchor = component.querySelector(`[data-explicit-port-anchor="${port}"]`)!;
       expect(conductor.getAttribute("x1")).toBe(contact.getAttribute("cx"));
       expect(conductor.getAttribute("y1")).toBe(contact.getAttribute("cy"));
+      expect(conductor.getAttribute("stroke-linecap")).toBe("round");
       expect(branch.getAttribute("data-x")).toBe(conductor.getAttribute("x2"));
       expect(branch.getAttribute("data-y")).toBe(conductor.getAttribute("y2"));
       expect(anchor.getAttribute("data-schema-end-x")).toBe(conductor.getAttribute("x2"));
@@ -345,6 +347,28 @@ describe("Omschakelaar", () => {
 
     expect(Number(inputConductor.getAttribute("x1"))).toBe(Number(inputConductor.getAttribute("x2")));
     expect(Number(inputConductor.getAttribute("y1"))).toBe(Number(wrapper.getAttribute("data-schema-height")));
+  });
+
+  it("uses pixel-aligned axes when both vertical outputs are wired", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    for (const port of store.getSnapshot().document.getChildren(switchId)) {
+      store.commands.addItem(port.id, "Kring");
+    }
+    const document = new DOMParser().parseFromString(
+      store.getLegacyDocument().toSVG(0, "horizontal").data,
+      "image/svg+xml",
+    );
+    const component = document.querySelector('[data-component="omschakelaar"]')!;
+    for (const selector of [
+      '[data-switch-contact="IN"]',
+      '[data-switch-contact="OUT1"]',
+      '[data-switch-contact="OUT2"]',
+    ]) {
+      const contact = component.querySelector(selector)!;
+      expect(Number(contact.getAttribute("cx")) % 1).toBe(0);
+      expect(Number(contact.getAttribute("cy")) % 1).toBe(0);
+    }
   });
 
   it("creates an unprotected connection circuit below a physical port", () => {

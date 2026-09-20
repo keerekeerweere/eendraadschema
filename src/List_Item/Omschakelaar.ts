@@ -169,15 +169,15 @@ export class Omschakelaar extends Electro_Item {
     const escapedParentPort = htmlspecialchars(parentPort);
     let data = `<g data-component="omschakelaar" data-position="neutral" data-orientation="${orientation}">`;
     data += orientation === "vertical"
-      ? `<line data-input-conductor="${escapedParentPort}" x1="${common.x}" y1="${incomingY}" x2="${common.x}" y2="${common.y}" stroke="black" />`
-      : `<line data-input-conductor="${escapedParentPort}" x1="1" y1="${common.y}" x2="${common.x}" y2="${common.y}" stroke="black" />`;
+      ? `<line data-input-conductor="${escapedParentPort}" x1="${common.x}" y1="${incomingY}" x2="${common.x}" y2="${common.y}" stroke="black" stroke-linecap="round" />`
+      : `<line data-input-conductor="${escapedParentPort}" x1="1" y1="${common.y}" x2="${common.x}" y2="${common.y}" stroke="black" stroke-linecap="round" />`;
     data += `<circle data-switch-contact="${escapedParentPort}" cx="${common.x}" cy="${common.y}" r="2.5" fill="black" />`;
 
     branches.forEach((branch, index) => {
       const output = outputs[index];
       const escapedPort = htmlspecialchars(branch.port);
       data += `<circle data-switch-contact="${escapedPort}" cx="${output.x}" cy="${output.y}" r="2.5" fill="black" />`;
-      data += `<line data-output-conductor="${escapedPort}" x1="${output.x}" y1="${output.y}" x2="${output.endpointX}" y2="${output.endpointY}" stroke="black" />`;
+      data += `<line data-output-conductor="${escapedPort}" x1="${output.x}" y1="${output.y}" x2="${output.endpointX}" y2="${output.endpointY}" stroke="black" stroke-linecap="round" />`;
     });
 
     const armEndX = orientation === "vertical" ? common.x : common.x + 20;
