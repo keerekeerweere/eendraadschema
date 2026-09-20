@@ -97,10 +97,12 @@ Labels and rating text remain upright in either orientation. In vertical orienta
 Conductor continuity is a rendering invariant:
 
 - the incoming conductor endpoint equals the common-contact coordinate;
+- the outgoing vertical conductor from the parent `Kring`/automaat and the omschakelaar `IN` conductor are one straight rendered line: after all nested SVG translations, their x-coordinates are identical;
+- the shared parent-to-IN axis uses an integer SVG coordinate so browser rasterization cannot create a visible pixel offset;
 - each output stub begins at its alternative-contact coordinate;
 - an attached circuit's starting coordinate equals the corresponding output-stub endpoint;
 - an empty port's insertion anchor equals its output-stub endpoint;
-- applying vertical orientation preserves these shared coordinates without gaps or duplicate segments.
+- applying vertical orientation preserves these shared coordinates without gaps, lateral shifts, or duplicate segments. The two joined parent/IN segments use continuous stroke caps at their shared endpoint.
 
 The renderer calculates bounds large enough for both branch subtrees, labels, and optional description without clipping adjacent content. Print and SVG export use the same renderer output.
 
@@ -128,6 +130,8 @@ Focused automated coverage will verify:
 - automatic horizontal and vertical orientation;
 - exactly one visible conductor per port and no connector placeholder lines;
 - numeric equality of incoming/contact, contact/stub, stub/circuit, and stub/insertion-anchor endpoints;
+- end-to-end equality of the parent `Kring`/automaat outgoing line and the translated omschakelaar `IN` line in a multi-item vertical layout;
+- integer-pixel alignment of the shared parent-to-IN axis in the rendered SVG;
 - vertical rating/address placement clear of the incoming conductor;
 - direct schematic insertion into the intended `OUT1` or `OUT2` connector;
 - property-editor coverage and hierarchy capabilities.
