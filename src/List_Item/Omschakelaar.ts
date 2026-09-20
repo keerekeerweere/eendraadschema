@@ -1,11 +1,8 @@
 import { Electro_Item } from "./Electro_Item";
 import {
-  isOmschakelaarPort,
   OMSCHAKELAAR_POLES,
   OMSCHAKELAAR_RATINGS,
-  remainingOmschakelaarPorts,
 } from "../application/Omschakelaar";
-import type { OmschakelaarPort } from "../application/Omschakelaar";
 import { htmlspecialchars, svgTextWidth } from "../general";
 import { SVGelement } from "../SVGelement";
 
@@ -15,7 +12,6 @@ export class Omschakelaar extends Electro_Item {
     this.props.type = "Omschakelaar";
     this.props.aantal_polen = "4";
     this.props.amperage = "63";
-    this.props.parent_port = "IN";
     this.props.adres = "";
   }
 
@@ -30,12 +26,10 @@ export class Omschakelaar extends Electro_Item {
   overrideKeys(): void {
     if (!OMSCHAKELAAR_POLES.includes(this.props.aantal_polen)) this.props.aantal_polen = "4";
     if (!OMSCHAKELAAR_RATINGS.includes(this.props.amperage)) this.props.amperage = "63";
-    if (!isOmschakelaarPort(this.props.parent_port)) this.props.parent_port = "IN";
     if (typeof this.props.adres !== "string") this.props.adres = "";
   }
 
   toSVG(): SVGelement {
-    const parentPort = isOmschakelaarPort(this.props.parent_port) ? this.props.parent_port : "IN";
     const branches = this.getRenderBranches();
     const poles = OMSCHAKELAAR_POLES.includes(this.props.aantal_polen) ? this.props.aantal_polen : "4";
     const rating = OMSCHAKELAAR_RATINGS.includes(this.props.amperage) ? this.props.amperage : "63";
@@ -44,12 +38,11 @@ export class Omschakelaar extends Electro_Item {
     const orientation = this.getParent()?.getType() === "Kring" ? "vertical" : "horizontal";
 
     return orientation === "vertical"
-      ? this.renderVertical(parentPort, branches, ratingLabel, address)
-      : this.renderHorizontal(parentPort, branches, ratingLabel, address);
+      ? this.renderVertical(branches, ratingLabel, address)
+      : this.renderHorizontal(branches, ratingLabel, address);
   }
 
   private renderHorizontal(
-    parentPort: OmschakelaarPort,
     branches: ReturnType<Omschakelaar["getRenderBranches"]>,
     ratingLabel: string,
     address: string,
@@ -72,7 +65,6 @@ export class Omschakelaar extends Electro_Item {
     svg.ydown = labelBottom - centerY;
     svg.data = this.renderComponent(
       "horizontal",
-      parentPort,
       branches,
       { x: 26, y: centerY },
       [
@@ -87,7 +79,6 @@ export class Omschakelaar extends Electro_Item {
   }
 
   private renderVertical(
-    parentPort: OmschakelaarPort,
     branches: ReturnType<Omschakelaar["getRenderBranches"]>,
     ratingLabel: string,
     address: string,
@@ -101,9 +92,9 @@ export class Omschakelaar extends Electro_Item {
     ));
     const centerX = Math.round((leftX + rightX) / 2);
     const commonY = contactY + 34;
-    // The port label ("IN"/"OUT1"/"OUT2") sits on its own line right next to
-    // the common contact; the rating/address labels start a full line below
-    // it so long text like "63A 4P" never collides with the port label.
+    // The port label ("IN") sits on its own line right next to the common
+    // contact; the rating/address labels start a full line below it so long
+    // text like "63A 4P" never collides with the port label.
     const ratingY = commonY + 16;
     const addressY = commonY + 30;
     const incomingY = commonY + (address === "" ? 24 : 38);
@@ -124,7 +115,6 @@ export class Omschakelaar extends Electro_Item {
     svg.ydown = 0;
     svg.data = this.renderComponent(
       "vertical",
-      parentPort,
       branches,
       { x: centerX, y: commonY },
       [
@@ -139,9 +129,15 @@ export class Omschakelaar extends Electro_Item {
     return svg;
   }
 
+  /**
+   * The switch's two connectors have fixed structural roles: whichever port
+   * is not one of these children is always drawn/labelled "IN" (it is
+   * whatever the switch's own tree parent happens to be), and the two
+   * connectors are always "OUT1" (left/top) and "OUT2" (right/bottom), in
+   * that order, regardless of which one carries a pre-existing wire.
+   */
   private getRenderBranches() {
-    const parentPort = isOmschakelaarPort(this.props.parent_port) ? this.props.parent_port : "IN";
-    return remainingOmschakelaarPorts(parentPort).map(port => {
+    return (["OUT1", "OUT2"] as const).map(port => {
       const connector = this.sourcelist.data.find((candidate, index) =>
         this.sourcelist.active[index]
         && candidate.parent === this.id
@@ -160,7 +156,6 @@ export class Omschakelaar extends Electro_Item {
 
   private renderComponent(
     orientation: "horizontal" | "vertical",
-    parentPort: OmschakelaarPort,
     branches: ReturnType<Omschakelaar["getRenderBranches"]>,
     common: { x: number; y: number },
     outputs: Array<{ x: number; y: number; endpointX: number; endpointY: number }>,
@@ -169,12 +164,11 @@ export class Omschakelaar extends Electro_Item {
     labels: { x: number; ratingY: number; addressY: number },
     incomingY = common.y,
   ): string {
-    const escapedParentPort = htmlspecialchars(parentPort);
     let data = `<g data-component="omschakelaar" data-position="neutral" data-orientation="${orientation}">`;
     data += orientation === "vertical"
-      ? `<line data-input-conductor="${escapedParentPort}" x1="${common.x}" y1="${incomingY}" x2="${common.x}" y2="${common.y}" stroke="black" stroke-linecap="round" />`
-      : `<line data-input-conductor="${escapedParentPort}" x1="1" y1="${common.y}" x2="${common.x}" y2="${common.y}" stroke="black" stroke-linecap="round" />`;
-    data += `<circle data-switch-contact="${escapedParentPort}" cx="${common.x}" cy="${common.y}" r="2.5" fill="black" />`;
+      ? `<line data-input-conductor="IN" x1="${common.x}" y1="${incomingY}" x2="${common.x}" y2="${common.y}" stroke="black" stroke-linecap="round" />`
+      : `<line data-input-conductor="IN" x1="1" y1="${common.y}" x2="${common.x}" y2="${common.y}" stroke="black" stroke-linecap="round" />`;
+    data += `<circle data-switch-contact="IN" cx="${common.x}" cy="${common.y}" r="2.5" fill="black" />`;
 
     branches.forEach((branch, index) => {
       const output = outputs[index];
@@ -188,13 +182,13 @@ export class Omschakelaar extends Electro_Item {
     data += `<line data-selector-arm="true" x1="${common.x}" y1="${common.y}" x2="${armEndX}" y2="${armEndY}" stroke="black" />`;
 
     if (orientation === "vertical") {
-      data += `<text x="${common.x + 7}" y="${common.y + 4}" font-family="Arial, Helvetica, sans-serif" font-size="9">${escapedParentPort}</text>`;
+      data += `<text x="${common.x + 7}" y="${common.y + 4}" font-family="Arial, Helvetica, sans-serif" font-size="9">IN</text>`;
       branches.forEach((branch, index) => {
         const output = outputs[index];
         data += `<text x="${output.x}" y="${output.y - 7}" style="text-anchor:middle" font-family="Arial, Helvetica, sans-serif" font-size="9">${htmlspecialchars(branch.port)}</text>`;
       });
     } else {
-      data += `<text x="5" y="${common.y - 7}" font-family="Arial, Helvetica, sans-serif" font-size="9">${escapedParentPort}</text>`;
+      data += `<text x="5" y="${common.y - 7}" font-family="Arial, Helvetica, sans-serif" font-size="9">IN</text>`;
       branches.forEach((branch, index) => {
         const output = outputs[index];
         data += `<text x="${output.x + 7}" y="${output.y - 5}" font-family="Arial, Helvetica, sans-serif" font-size="9">${htmlspecialchars(branch.port)}</text>`;

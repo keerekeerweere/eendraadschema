@@ -48,7 +48,7 @@ describe("ConfiguredItemPropertiesEditor", () => {
     expect(screen.getByLabelText("Ventilator")).toBeInTheDocument();
   });
 
-  it("edits omschakelaar poles, rating, parent-side port, and description", () => {
+  it("edits omschakelaar poles, rating, and description", () => {
     const { schemaStore, editorStore } = createConfiguredItem("Omschakelaar");
     render(<ItemPropertiesPanel schemaStore={schemaStore} editorStore={editorStore} />);
 
@@ -57,7 +57,7 @@ describe("ConfiguredItemPropertiesEditor", () => {
     expect(Array.from(rating.querySelectorAll("option"), option => option.value)).toEqual([
       "16", "25", "32", "40", "63", "80", "100",
     ]);
-    expect(screen.getByLabelText("Poort aan invoerzijde")).toHaveValue("IN");
+    expect(screen.queryByLabelText("Poort aan invoerzijde")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Adres/omschrijving")).toHaveValue("");
 
     fireEvent.change(rating, { target: { value: "80" } });
