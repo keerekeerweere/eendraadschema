@@ -528,3 +528,14 @@ in vertical orientation; it now renders one text line below the port label
 instead of sharing its row.
 
 Verified with: `npm test -- --run`, `npm run typecheck:test`, `npm run build`.
+
+**Post-ship clarification:** this task was briefly reverted, then re-applied, in
+the same session. The maintainer's actual scenario (Sontheimer UL040 Victron
+bypass, `docs/Screenshot From 2026-09-20 18-57-58.png`) is: the switch is
+added under an existing "household board" item (which automatically becomes
+`IN`, no configuration needed), an existing "net" circuit is added/moved as a
+normal child under the `OUT1` connector row, and an automaat+inverter chain
+is added under `OUT2`. That is plain child-addition on a fixed-role switch —
+it does not need any parent-side reassignment. The earlier back-and-forth
+was a miscommunication about how to attach a branch to a specific port
+(use the connector's own "+", not a property), not a missing capability.
