@@ -226,7 +226,7 @@ export class LegacySchemaDocumentReader implements SchemaDocumentReader {
       parentId: item.parent === 0 ? null : item.parent,
       type: item.getType() ?? "",
       label: getLabel(item.getType() ?? "", summary),
-      description: getDescription(summary),
+      description: item.getType() === "Omschakelaarpoort" ? undefined : getDescription(summary),
       childIds: Object.freeze([...childIds]),
       summary,
       role,
@@ -239,7 +239,7 @@ export class LegacySchemaDocumentReader implements SchemaDocumentReader {
         canExpand: isEditableItem && !isProtectedConnector && item.isExpandable(),
         allowedChildTypes: isEditableItem ? allowedChildTypes(item) : Object.freeze([]),
         allowedInsertBeforeTypes: insertBeforeTypes,
-        allowedItemTypes: isEditableItem && !isProtectedConnector ? Object.freeze(isBoardRoot
+        allowedItemTypes: isEditableItem && !isProtectedConnector && item.getType() !== "Omschakelaar" ? Object.freeze(isBoardRoot
           ? [item.getType()]
           : Array.from(new Set([
               item.getType(),

@@ -41,6 +41,10 @@ export function HierarchyNode({
   const siblingIndex = siblings.findIndex((sibling) => sibling.id === node.id);
   const expanded = expandedItemIds.has(node.id);
   const selected = selectedItemId === node.id;
+  const hasStructuralActions = node.capabilities.canMove
+    || node.capabilities.canDuplicate
+    || node.capabilities.canDelete
+    || node.capabilities.canExpand;
 
   function runCommand(command: () => void): void {
     try {
@@ -127,7 +131,7 @@ export function HierarchyNode({
           {node.description ? <small className="truncate text-neutral-500">{node.description}</small> : null}
         </button>
 
-      {selected ? <label className="col-start-2 min-w-0 self-center">
+      {selected && node.capabilities.allowedItemTypes.length > 0 ? <label className="col-start-2 min-w-0 self-center">
           <span className="sr-only">Type van {node.label}</span>
           <select
             className={cx(ui.field, "max-w-full")}
@@ -139,7 +143,7 @@ export function HierarchyNode({
           </select>
         </label> : null}
 
-        {selected ? <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-1" aria-label={`Acties voor ${node.label}`}>
+        {selected && hasStructuralActions ? <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-1" aria-label={`Acties voor ${node.label}`}>
           <button
             className={ui.button}
             type="button"

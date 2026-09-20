@@ -294,6 +294,15 @@ export class LegacySchemaStore implements SchemaStore {
       if (typeof changedType !== "string") {
         throw new SchemaCommandError("INVALID_CHANGE", "Het itemtype moet tekst zijn.");
       }
+      if (
+        changedType !== item.getType()
+        && (item.getType() === "Omschakelaar" || changedType === "Omschakelaar")
+      ) {
+        throw new SchemaCommandError(
+          "INVALID_CHANGE",
+          "Een omschakelaar moet als volledig onderdeel worden toegevoegd of verwijderd.",
+        );
+      }
       this.assertPublicItemType(changedType);
       const parent = this.getParent(item.parent === 0 ? null : item.parent);
       this.assertChildAllowed(parent, changedType);

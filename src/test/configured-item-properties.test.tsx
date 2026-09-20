@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { CONFIGURED_ITEM_PROPERTY_SCHEMAS } from "../application/ConfiguredItemProperties";
 import { LocalEditorStore } from "../application/EditorStore";
@@ -46,5 +46,22 @@ describe("ConfiguredItemPropertiesEditor", () => {
     );
     view.rerender(<ItemPropertiesPanel schemaStore={schemaStore} editorStore={editorStore} />);
     expect(screen.getByLabelText("Ventilator")).toBeInTheDocument();
+  });
+
+  it("edits omschakelaar poles, rating, parent-side port, and description", () => {
+    const { schemaStore, editorStore } = createConfiguredItem("Omschakelaar");
+    render(<ItemPropertiesPanel schemaStore={schemaStore} editorStore={editorStore} />);
+
+    expect(screen.getByLabelText("Aantal polen")).toHaveValue("4");
+    const rating = screen.getByLabelText("Nominale stroom");
+    expect(Array.from(rating.querySelectorAll("option"), option => option.value)).toEqual([
+      "16", "25", "32", "40", "63", "80", "100",
+    ]);
+    expect(screen.getByLabelText("Poort aan invoerzijde")).toHaveValue("IN");
+    expect(screen.getByLabelText("Adres/omschrijving")).toHaveValue("");
+
+    fireEvent.change(rating, { target: { value: "80" } });
+    expect(schemaStore.getSnapshot().properties
+      .getConfiguredItem(editorStore.getSnapshot().selectedItemId!)?.values.amperage).toBe("80");
   });
 });

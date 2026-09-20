@@ -70,6 +70,7 @@ export class Kring extends Electro_Item {
                 this.props.kabel_is_aanwezig = true;         // wel een kabel na bord
                 break;
             case "Splitsing":
+            case "Omschakelaarpoort":
                 this.props.bescherming = "geen"; // geen zekering per default na splitsing
                 this.props.naam = "";    // We geven de kring geen naam
                 this.props.kabel_is_aanwezig = false; // geen kabel per default na splitsing

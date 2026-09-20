@@ -243,4 +243,26 @@ describe("Omschakelaar", () => {
     expect(svg.xleft + svg.xright).toBeGreaterThan(0);
     expect(svg.yup + svg.ydown).toBeGreaterThan(0);
   });
+
+  it("creates an unprotected connection circuit below a physical port", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    const portId = store.getSnapshot().document.getChildren(switchId)[0].id;
+
+    const branchId = store.commands.addItem(portId, "Kring");
+    const branch = store.getLegacyDocument().getElectroItemById(branchId)!;
+
+    expect(branch.props.bescherming).toBe("geen");
+    expect(branch.props.kabel_is_aanwezig).toBe(false);
+  });
+
+  it("rejects generic type changes that would create or dismantle a compound switch", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    const ordinaryItemId = store.commands.addItem(circuitId, "Contactdoos");
+
+    expectInvalidChange(() => store.commands.changeItemType(switchId, "Contactdoos"));
+    expectInvalidChange(() => store.commands.changeItemType(ordinaryItemId, "Omschakelaar"));
+    expect(store.getSnapshot().document.getItem(switchId)?.capabilities.allowedItemTypes).toEqual([]);
+  });
 });
