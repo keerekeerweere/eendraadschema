@@ -64,6 +64,7 @@ test("opens a version-4 fixture and preserves uncommon items and links through a
   await expect(page.getByRole("region", { name: "Nog te plaatsen" })).toContainText(/1 van 1 veldsymbolen geplaatst/);
   await expect(page.getByRole("region", { name: "Nog te plaatsen" })).toContainText("Alles geplaatst");
 
+  await page.getByLabel("Applicatiemenu openen").click();
   await page.getByRole("navigation", { name: "Applicatiemenu" })
     .getByRole("button", { name: "Bestand" }).click();
   const fileDialog = page.getByRole("dialog", { name: "Bestand" });
@@ -93,8 +94,9 @@ test("opens a version-4 fixture and preserves uncommon items and links through a
 
 test("downloads the visible print page as a valid SVG", async ({ page }) => {
   await loadExample(page);
+  await page.getByLabel("Applicatiemenu openen").click();
   await page.getByRole("navigation", { name: "Applicatiemenu" })
-    .getByRole("button", { name: "Print" }).click();
+    .getByRole("button", { name: "Afdrukken en exporteren" }).click();
   const printDialog = page.getByRole("dialog", { name: "Afdrukken" });
   await expect(printDialog.locator('[aria-label="Afdrukvoorbeeld"] > div > svg')).toBeVisible();
 
@@ -113,8 +115,9 @@ test("downloads the visible print page as a valid SVG", async ({ page }) => {
 
 test("generates a downloadable PDF for an explicit page range", async ({ page }) => {
   await loadExample(page);
+  await page.getByLabel("Applicatiemenu openen").click();
   await page.getByRole("navigation", { name: "Applicatiemenu" })
-    .getByRole("button", { name: "Print" }).click();
+    .getByRole("button", { name: "Afdrukken en exporteren" }).click();
   const printDialog = page.getByRole("dialog", { name: "Afdrukken" });
   await printDialog.getByLabel("Resolutie").selectOption("150");
   await printDialog.getByLabel("Paginabereik").fill("1");

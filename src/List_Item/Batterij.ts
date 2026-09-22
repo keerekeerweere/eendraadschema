@@ -44,6 +44,7 @@ export class Batterij extends Electro_Item {
                                         + '<use xlink:href="#batterij" x="21" y="25"></use>';
         }
 
+        mySVG.data += this.addMultiplicityToSVG(mySVG, 78, 30);
         
         mySVG.data += (sitplan? "": this.addAddressToSVG(mySVG,55,10));
 

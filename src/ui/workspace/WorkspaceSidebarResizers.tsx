@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { WorkspaceStore } from "../../application/WorkspaceStore";
 import { useWorkspaceSnapshot } from "../useWorkspaceSnapshot";
 
@@ -19,7 +19,9 @@ export function WorkspaceSidebarResizers({ store }: { readonly store: WorkspaceS
   const [rightWidth, setRightWidth] = useState(DEFAULT_WIDTH);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [mobileSide, setMobileSide] = useState<SidebarSide | null>(null);
   const draggingSide = useRef<SidebarSide | null>(null);
+  const mobileTriggers = useRef<Record<SidebarSide, HTMLButtonElement | null>>({ left: null, right: null });
 
   const effectiveLeftWidth = leftCollapsed ? 0 : leftWidth;
   const effectiveRightWidth = rightCollapsed ? 0 : rightWidth;
@@ -33,6 +35,28 @@ export function WorkspaceSidebarResizers({ store }: { readonly store: WorkspaceS
       root.style.removeProperty("--workspace-right-width");
     };
   }, [effectiveLeftWidth, effectiveRightWidth]);
+
+  useEffect(() => {
+    setMobileSide(null);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!mobileSide) return;
+    const panel = document.getElementById(mobileSide === "left" ? "react-workspace-sidebar" : "properties_col");
+    if (!panel) return;
+    panel.classList.add("workspace-drawer-open");
+    requestAnimationFrame(() => panel.focus());
+    function closeOnEscape(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setMobileSide(null);
+      mobileTriggers.current[mobileSide!]?.focus();
+    }
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      panel.classList.remove("workspace-drawer-open");
+    };
+  }, [mobileSide]);
 
   if (!isActive || activeTab === "dossier") return null;
 
@@ -68,8 +92,42 @@ export function WorkspaceSidebarResizers({ store }: { readonly store: WorkspaceS
   const separatorClass = "workspace-resize-handle fixed top-[var(--total-offset)] bottom-0 z-20 w-2 cursor-col-resize bg-transparent hover:bg-blue-500/20 focus-visible:bg-blue-500/30 focus-visible:outline-none";
   const toggleClass = "workspace-resize-handle fixed top-[calc(var(--total-offset)+0.75rem)] z-30 grid size-7 place-items-center rounded-full border border-neutral-300 bg-white text-sm font-bold text-neutral-700 shadow hover:bg-neutral-100 focus-visible:outline-3 focus-visible:outline-blue-700/35";
 
+  function closeMobileSide() {
+    const previousSide = mobileSide;
+    setMobileSide(null);
+    if (previousSide) mobileTriggers.current[previousSide]?.focus();
+  }
+
+  const mobileTriggerClass = "hidden min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 max-[72rem]:flex";
+
   return (
     <>
+      <div className="fixed top-[calc(var(--total-offset)+0.5rem)] left-3 z-30 flex gap-2" aria-label="Werkruimtepanelen">
+        {activeTab !== "board" ? (
+          <button
+            ref={element => { mobileTriggers.current.left = element; }}
+            type="button"
+            className={mobileTriggerClass}
+            aria-controls="react-workspace-sidebar"
+            aria-expanded={mobileSide === "left"}
+            onClick={() => setMobileSide(side => side === "left" ? null : "left")}
+          ><span aria-hidden="true">☰</span><span>Navigatie</span></button>
+        ) : null}
+        <button
+          ref={element => { mobileTriggers.current.right = element; }}
+          type="button"
+          className={mobileTriggerClass}
+          aria-controls="properties_col"
+          aria-expanded={mobileSide === "right"}
+          onClick={() => setMobileSide(side => side === "right" ? null : "right")}
+        ><span aria-hidden="true">▤</span><span>Details</span></button>
+      </div>
+      {mobileSide ? (
+        <>
+          <button type="button" className="fixed inset-0 z-40 hidden cursor-default bg-slate-950/35 max-[72rem]:block" aria-label="Paneel sluiten" onClick={closeMobileSide} />
+          <button type="button" className="fixed top-[calc(var(--total-offset)+0.75rem)] right-4 z-[60] hidden size-8 place-items-center rounded-lg bg-slate-100 text-xl text-slate-800 focus-visible:outline-2 focus-visible:outline-blue-700 max-[72rem]:grid" aria-label="Paneel sluiten" onClick={closeMobileSide}>×</button>
+        </>
+      ) : null}
       <div
         className={`${separatorClass} left-[calc(var(--workspace-left-width)-0.25rem)]`}
         role="separator"

@@ -9,7 +9,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <meta name="keywords" content="Eendraadschema, online, tekenen, svg, gratis">
     <meta name="description" content="Een tool om ééndraadschema’s te tekenen">
-    <meta name="author" content="Ivan Goethals">
+    <meta name="author" content="Ivan Goethals, Keerekeerweere">
     <style type="text/css" media="print">
       @page {
         size: landscape;
@@ -19,7 +19,7 @@
   <body>
     <div id="container" class="h-screen w-screen">
       <div id="react-editor-root"></div>
-      <div id="react-application-menu-root" class="relative z-40 h-[var(--menu-height)] w-full border-b border-neutral-300 bg-neutral-200 select-none"></div>
+      <div id="react-application-menu-root" class="hidden"></div>
       <div id="app" class="flex-1 overflow-hidden">
         <svg id="svgdefs" class="absolute size-0" aria-hidden="true">
           <defs>
@@ -29,7 +29,7 @@
           </defs>
         </svg>
         <div id="react-workspace-commandbar-root" class="fixed top-[calc(var(--react-shell-height)+var(--menu-height))] right-0 left-0 z-30 hidden h-[var(--ribbon-height)] overflow-x-auto"></div>
-        <aside id="react-workspace-sidebar" class="fixed top-[var(--total-offset)] bottom-0 left-0 z-10 hidden w-[var(--workspace-left-width)] overflow-y-auto overflow-x-hidden border-r border-neutral-300 bg-white">
+        <aside id="react-workspace-sidebar" tabindex="-1" class="fixed top-[var(--total-offset)] bottom-0 left-0 z-10 hidden w-[var(--workspace-left-width)] overflow-y-auto overflow-x-hidden border-r border-neutral-300 bg-white">
           <div id="react-hierarchy-root"></div>
         </aside>
         <main id="react-board-layout-root" class="fixed top-[var(--total-offset)] right-[var(--workspace-right-width)] bottom-0 left-[var(--workspace-left-width)] z-0 hidden overflow-hidden bg-neutral-100"></main>
@@ -45,7 +45,7 @@
             <div id="paper" class="absolute top-[var(--paperPadding)] left-[var(--paperPadding)] h-[150mm] w-[277mm] rounded-md bg-white shadow-xl"></div>
           </div>
         </div>
-        <aside id="properties_col" class="fixed top-[var(--total-offset)] right-0 bottom-0 z-10 hidden w-[var(--workspace-right-width)] overflow-y-auto overflow-x-hidden border-l border-neutral-300 bg-white" aria-label="Eigenschappen van het geselecteerde onderdeel">
+        <aside id="properties_col" tabindex="-1" class="fixed top-[var(--total-offset)] right-0 bottom-0 z-10 hidden w-[var(--workspace-right-width)] overflow-y-auto overflow-x-hidden border-l border-neutral-300 bg-white" aria-label="Eigenschappen van het geselecteerde onderdeel">
           <div id="react-properties-root"></div>
         </aside>
       </div>

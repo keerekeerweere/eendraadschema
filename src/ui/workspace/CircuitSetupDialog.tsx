@@ -9,12 +9,15 @@ import { poleCountOptions, protectionOptions } from "../properties/circuit/circu
 
 interface CircuitSetupDialogProps {
   readonly boards: readonly DistributionBoard[];
+  readonly activeBoardId: string;
+  readonly boardCircuits: Readonly<Record<string, readonly { id: number; label: string; position: number }[]>>;
   readonly onCancel: () => void;
-  readonly onCreate: (boardId: string, changes: CircuitPropertyChanges) => void;
+  readonly onCreate: (boardId: string, changes: CircuitPropertyChanges, position?: number) => void;
 }
 
-export function CircuitSetupDialog({ boards, onCancel, onCreate }: CircuitSetupDialogProps) {
-  const [boardId, setBoardId] = useState(boards[0]?.id ?? "");
+export function CircuitSetupDialog({ boards, activeBoardId, boardCircuits, onCancel, onCreate }: CircuitSetupDialogProps) {
+  const [boardId, setBoardId] = useState(boards.some(board => board.id === activeBoardId) ? activeBoardId : (boards[0]?.id ?? ""));
+  const [position, setPosition] = useState("end");
   const [name, setName] = useState("");
   const [protection, setProtection] = useState<CircuitProtection>("automatisch");
   const [poleCount, setPoleCount] = useState<CircuitPoleCount>("2");
@@ -32,7 +35,7 @@ export function CircuitSetupDialog({ boards, onCancel, onCreate }: CircuitSetupD
       amperage: amperage.trim(),
       hasCable,
       cableType: hasCable ? cableType.trim() : "",
-    });
+    }, position === "end" ? undefined : Number(position));
   }
 
   const fieldClass = "grid gap-1.5 text-sm font-medium text-neutral-800";
@@ -50,8 +53,16 @@ export function CircuitSetupDialog({ boards, onCancel, onCreate }: CircuitSetupD
           <div className="grid gap-4 p-5 sm:grid-cols-2">
             <label className={`${fieldClass} sm:col-span-2`}>
               Verdeelbord
-              <select className={controlClass} value={boardId} onChange={(event) => setBoardId(event.target.value)} required>
+              <select className={controlClass} value={boardId} onChange={(event) => { setBoardId(event.target.value); setPosition("end"); }} required>
                 {boards.map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}
+              </select>
+            </label>
+            <label className={`${fieldClass} sm:col-span-2`}>
+              Plaats in dit bord
+              <select className={controlClass} value={position} onChange={(event) => setPosition(event.target.value)}>
+                <option value="end">Achteraan</option>
+                <option value="0">Vooraan</option>
+                {(boardCircuits[boardId] ?? []).map(circuit => <option key={circuit.id} value={circuit.position}>Na {circuit.label}</option>)}
               </select>
             </label>
             <label className={`${fieldClass} sm:col-span-2`}>

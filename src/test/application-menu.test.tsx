@@ -5,7 +5,7 @@ import { ApplicationMenu } from "../ui/workspace/ApplicationMenu";
 afterEach(cleanup);
 
 describe("ApplicationMenu", () => {
-  it("keeps primary document actions directly available", () => {
+  it("keeps document actions available in the application menu", () => {
     const onNew = vi.fn();
     const onFile = vi.fn();
     const onPrint = vi.fn();
@@ -19,15 +19,18 @@ describe("ApplicationMenu", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Nieuw" }));
+    fireEvent.click(screen.getByText("Menu", { exact: false }));
+    fireEvent.click(screen.getByRole("button", { name: "Nieuw dossier" }));
+    fireEvent.click(screen.getByText("Menu", { exact: false }));
     fireEvent.click(screen.getByRole("button", { name: "Bestand" }));
-    fireEvent.click(screen.getByRole("button", { name: "Print" }));
+    fireEvent.click(screen.getByText("Menu", { exact: false }));
+    fireEvent.click(screen.getByRole("button", { name: "Afdrukken en exporteren" }));
     expect(onNew).toHaveBeenCalledOnce();
     expect(onFile).toHaveBeenCalledOnce();
     expect(onPrint).toHaveBeenCalledOnce();
   });
 
-  it("groups documentation and contact in the help dropdown", () => {
+  it("groups documentation and contact in the application menu", () => {
     const onDocumentation = vi.fn();
     const onAbout = vi.fn();
     render(
@@ -40,14 +43,14 @@ describe("ApplicationMenu", () => {
       />,
     );
 
-    const details = screen.getByText("Hulp", { exact: true }).closest("details");
+    const details = screen.getByText("Menu", { exact: false }).closest("details");
     expect(details).not.toHaveAttribute("open");
-    fireEvent.click(screen.getByText("Hulp", { exact: true }));
-    fireEvent.click(screen.getByRole("button", { name: "Documentatie" }));
+    fireEvent.click(screen.getByText("Menu", { exact: false }));
+    fireEvent.click(screen.getByRole("button", { name: "Handleiding" }));
     expect(onDocumentation).toHaveBeenCalledOnce();
     expect(details).not.toHaveAttribute("open");
 
-    fireEvent.click(screen.getByText("Hulp", { exact: true }));
+    fireEvent.click(screen.getByText("Menu", { exact: false }));
     fireEvent.click(screen.getByRole("button", { name: "Info en contact" }));
     expect(onAbout).toHaveBeenCalledOnce();
   });

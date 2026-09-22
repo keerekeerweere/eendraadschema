@@ -2,6 +2,7 @@ import { randomId } from "../general";
 import { Electro_Item } from "../List_Item/Electro_Item";
 import type { Hierarchical_List } from "../Hierarchical_List";
 import { DEFAULT_SITUATION_SCALE } from "./SituationPlanConfig";
+import { showToastNotice } from "../application/ToastNotice";
 
 export type AdresLocation = 'rechts'|'links'|'boven'|'onder';
 export type AdresType = 'auto'|'manueel';
@@ -430,12 +431,12 @@ export class SituationPlanElement {
                     callback();
                 };
                 image.onerror = () => { 
-                    alert('Het formaat van deze file wordt niet ondersteund.'); 
+                    showToastNotice('Het formaat van deze file wordt niet ondersteund.');
                 };
             };
             reader.readAsDataURL(file); // Read the file as a data URL 
         } else {
-            alert('Geen bestand geselecteerd');
+            showToastNotice('Geen bestand geselecteerd');
         }
     }
 

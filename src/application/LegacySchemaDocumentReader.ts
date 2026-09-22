@@ -218,6 +218,7 @@ export class LegacySchemaDocumentReader implements SchemaDocumentReader {
     const role = getRole(item);
     const isEditableItem = role === "item";
     const isProtectedConnector = item.getType() === "Omschakelaarpoort";
+    const childTypes = isEditableItem ? allowedChildTypes(item) : Object.freeze([]);
     const insertBeforeTypes = isEditableItem && !isProtectedConnector
       ? allowedInsertBeforeTypes(item.sourcelist, item, isBoardRoot)
       : Object.freeze([]);
@@ -226,18 +227,18 @@ export class LegacySchemaDocumentReader implements SchemaDocumentReader {
       parentId: item.parent === 0 ? null : item.parent,
       type: item.getType() ?? "",
       label: getLabel(item.getType() ?? "", summary),
-      description: item.getType() === "Omschakelaarpoort" ? undefined : getDescription(summary),
+      description: isProtectedConnector ? undefined : getDescription(summary),
       childIds: Object.freeze([...childIds]),
       summary,
       role,
       capabilities: Object.freeze({
-        canAddChild: isEditableItem && item.checkInsertChild(),
+        canAddChild: isEditableItem && childTypes.length > 0 && item.checkInsertChild(),
         canInsertBefore: insertBeforeTypes.length > 0,
         canDelete: isEditableItem && !isProtectedConnector && !isBoardRoot,
         canDuplicate: isEditableItem && !isProtectedConnector && !isBoardRoot && item.checkInsertSibling(),
         canMove: isEditableItem && !isProtectedConnector && !isBoardRoot,
         canExpand: isEditableItem && !isProtectedConnector && item.isExpandable(),
-        allowedChildTypes: isEditableItem ? allowedChildTypes(item) : Object.freeze([]),
+        allowedChildTypes: childTypes,
         allowedInsertBeforeTypes: insertBeforeTypes,
         allowedItemTypes: isEditableItem && !isProtectedConnector && item.getType() !== "Omschakelaar" ? Object.freeze(isBoardRoot
           ? [item.getType()]

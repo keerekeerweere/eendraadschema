@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FileService } from "../../application/FileService";
 import type { SchemaStore } from "../../application/SchemaStore";
 import { useSchemaSnapshot } from "../useSchemaSnapshot";
+import { ui } from "../uiStyles";
 
 interface FileDialogProps {
   readonly fileService: FileService;
@@ -39,7 +40,7 @@ export function FileDialog({
     }
   }
 
-  const buttonClass = "rounded bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 disabled:opacity-50";
+  const buttonClass = ui.primaryButton;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <section role="dialog" aria-modal="true" aria-labelledby="file-dialog-title" className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl bg-white p-6 shadow-2xl">
@@ -48,9 +49,9 @@ export function FileDialog({
             <p className="m-0 text-xs font-semibold uppercase tracking-wide text-blue-700">Elektrisch dossier</p>
             <h2 id="file-dialog-title" className="my-1 text-2xl font-bold">Bestand</h2>
           </div>
-          <button type="button" className="rounded px-2 py-1 text-xl hover:bg-neutral-100" aria-label="Sluiten" onClick={onClose}>×</button>
+          <button type="button" className="grid size-10 place-items-center rounded-lg text-xl hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-700" aria-label="Sluiten" onClick={onClose}>×</button>
         </div>
-        {error ? <p className="rounded bg-red-50 p-3 text-red-800" role="alert">{error}</p> : null}
+        {error ? <p className={ui.error} role="alert">{error}</p> : null}
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <article className="rounded-lg border border-neutral-200 p-4">
             <h3 className="mt-0">Openen</h3>
@@ -64,7 +65,7 @@ export function FileDialog({
             <h3 className="mt-0">Opslaan</h3>
             <label className="grid gap-1 text-sm font-semibold">
               Bestandsnaam
-              <input className="rounded border border-neutral-300 px-3 py-2" value={filename} onChange={event => setFilename(event.target.value)} />
+              <input className={ui.field} value={filename} onChange={event => setFilename(event.target.value)} />
             </label>
             <label className="mt-3 flex items-start gap-2 text-sm">
               <input
@@ -83,7 +84,7 @@ export function FileDialog({
                 {busy ? "Opslaan…" : "Opslaan"}
               </button>
               {state.fileApiAvailable ? (
-                <button type="button" className="rounded border border-neutral-300 px-4 py-2 font-semibold hover:bg-neutral-50" disabled={busy} onClick={() => save(true)}>
+                <button type="button" className={`${ui.button} font-semibold`} disabled={busy} onClick={() => save(true)}>
                   Opslaan als
                 </button>
               ) : null}
@@ -92,7 +93,7 @@ export function FileDialog({
           <article className="rounded-lg border border-amber-200 bg-amber-50 p-4 md:col-span-2">
             <h3 className="mt-0">Dossiers samenvoegen</h3>
             <p className="text-sm text-neutral-700">Voeg verdeelborden en onderdelen uit een ander EDS-bestand aan dit dossier toe.</p>
-            <button type="button" className="rounded border border-amber-400 bg-white px-4 py-2 font-semibold text-amber-900 hover:bg-amber-100" onClick={() => {
+            <button type="button" className={`${ui.button} font-semibold`} onClick={() => {
               onAppend();
               onClose();
             }}>

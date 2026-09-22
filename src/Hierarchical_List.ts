@@ -35,6 +35,7 @@ import { Motor } from "./List_Item/Motor";
 import { Omvormer } from "./List_Item/Omvormer";
 import { Omschakelaar } from "./List_Item/Omschakelaar";
 import { Omschakelaarpoort } from "./List_Item/Omschakelaarpoort";
+import { showToastNotice } from "./application/ToastNotice";
 import { Overspanningsbeveiliging } from "./List_Item/Overspanningsbeveiliging";
 import { Lichtcircuit } from "./List_Item/Schakelaars/Lichtcircuit";
 import { Schakelaars } from "./List_Item/Schakelaars/Schakelaars";
@@ -527,7 +528,7 @@ export class Hierarchical_List {
             this.data[ordinal].parent = my_id;
             this.data[ordinal].indent = this.data[ordinal-1].indent+1;
         } else {
-            alert("Het maximum aantal kinderen van dit element is "+maxchilds);
+            showToastNotice(`Dit element kan maximaal ${maxchilds} kinderen bevatten.`);
         }
         this.reSort();
     }
@@ -824,6 +825,26 @@ export class Hierarchical_List {
                     const connector = this.createItem("Omschakelaarpoort");
                     connector.props.poort = port;
                     this.insertChildAfterId(connector, this.id[i]);
+                }
+                this.voegAttributenToeAlsNodigEnReSort();
+                return;
+            }
+        }
+
+        // Flatten terminals written by the temporary configurable-inverter format.
+        // The established model stores an inverter's connected equipment directly
+        // in its child chain, so preserve those children and remove the wrappers.
+        for (let i = 0; i<this.length; i++) {
+            const inverter = this.data[i] as Electro_Item;
+            if (!this.active[i] || inverter.getType() !== "Omvormer") continue;
+            const connectors = this.data.filter((candidate, index) => (
+                this.active[index] && candidate.parent === inverter.id && candidate.props.type === "Omvormerpoort"
+            )) as Electro_Item[];
+            if (inverter.props.aansluitingen !== undefined) delete inverter.props.aansluitingen;
+            if (connectors.length > 0) {
+                for (const connector of connectors) {
+                    for (const child of this.data.filter(candidate => candidate.parent === connector.id)) child.parent = inverter.id;
+                    this.deleteById(connector.id);
                 }
                 this.voegAttributenToeAlsNodigEnReSort();
                 return;

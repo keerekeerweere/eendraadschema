@@ -1,3 +1,5 @@
+import { showToastNotice } from "../application/ToastNotice";
+
 // Import jsPDF types if available (otherwise use 'any')
 declare global {
     interface Window {
@@ -131,11 +133,11 @@ export function printPDF(
                     png = canvas.toDataURL("image/png");
                 } catch (e) {
                     if (img.complete) {
-                        alert(
+                        showToastNotice(
                             "Er is een element in het situatieschema dat verwijst naar een andere website en dit veroorzaakt een security-error in deze browser. Dit kan bijvoorbeeld gebeuren indien u een plattegrond gemaakt heeft met online tools zoals draw.io. Probeer uw plattegrond op te slaan in een ander formaat. Indien het probleem blijft aanhouden, contacteer ons dan via het contactformulier."
                         );
                     } else {
-                        alert(
+                        showToastNotice(
                             "Het genereren van de PDF is om onduidelijke redenen vastgelopen. Contacteer ons via het contactformulier."
                         );
                     }

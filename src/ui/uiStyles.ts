@@ -3,14 +3,14 @@ export function cx(...classes: Array<string | false | null | undefined>): string
 }
 
 export const ui = Object.freeze({
-  focusRing: "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-700/35",
-  button: "min-h-8 rounded-md border border-neutral-300 bg-white px-2 py-1 font-[inherit] hover:bg-neutral-50 disabled:cursor-default disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-700/35",
-  primaryButton: "min-h-9 rounded-md border border-blue-700 bg-blue-700 px-3 py-2 font-semibold text-white hover:bg-blue-800 disabled:cursor-default disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-700/35",
-  dangerButton: "min-h-8 rounded-md border border-red-200 bg-white px-2 py-1 font-semibold text-red-700 hover:bg-red-50 disabled:cursor-default disabled:opacity-50 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-red-700/35",
-  field: "min-h-9 w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 font-[inherit] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue-700/35",
+  focusRing: "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700",
+  button: "min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-[inherit] text-slate-800 hover:bg-slate-50 disabled:cursor-default disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700",
+  primaryButton: "min-h-11 rounded-lg border border-blue-700 bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 disabled:cursor-default disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700",
+  dangerButton: "min-h-10 rounded-lg border border-red-200 bg-white px-3 py-1.5 font-semibold text-red-700 hover:bg-red-50 disabled:cursor-default disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700",
+  field: "min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700",
   label: "grid gap-1 text-sm font-semibold",
   eyebrow: "text-xs tracking-wide text-neutral-500 uppercase",
-  error: "rounded-md border border-red-200 bg-red-50 p-3 text-red-800",
+  error: "rounded-lg border border-red-200 bg-red-50 p-3 text-red-800",
 });
 
 export const propertyStyles = Object.freeze({

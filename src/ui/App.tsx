@@ -46,9 +46,9 @@ import type { NoticeStore } from "../application/NoticeStore";
 import type { SchematicRenderStore } from "../application/SchematicRenderStore";
 import { NewDocumentDialog, type NewDocumentOptions } from "./workspace/NewDocumentDialog";
 import { HelpDialog } from "./workspace/HelpDialog";
-import { ApplicationMenu } from "./workspace/ApplicationMenu";
 import { NoticeDialog } from "./workspace/NoticeDialog";
 import { SchematicViewport } from "./schematic/SchematicViewport";
+import { ToastNotice } from "./layout/ToastNotice";
 
 export interface EditorAppProps {
   readonly schemaStore: SchemaStore;
@@ -93,7 +93,6 @@ export function EditorApp({
   schemaStore,
   editorStore,
   hierarchyMountElement,
-  applicationMenuMountElement = null,
   propertiesMountElement = null,
   saveStatusStore = null,
   statusBarMountElement = null,
@@ -175,6 +174,7 @@ export function EditorApp({
 
   return (
     <>
+      <ToastNotice />
       <McpProposalReview />
       {noticeStore ? <NoticeDialog store={noticeStore} /> : null}
       <WorkspaceChromeController
@@ -187,26 +187,20 @@ export function EditorApp({
         commandBarElement={commandBarMountElement}
       />
       <WorkspaceSidebarResizers store={workspaceStore} />
-      {applicationMenuMountElement
-        ? createPortal(
-            <ApplicationMenu
-              onNew={() => {
-                workspaceStore.commands.selectTab("dossier");
-                workspaceStore.commands.openDialog("new");
-              }}
-              onFile={() => workspaceStore.commands.openDialog("file")}
-              onPrint={() => workspaceStore.commands.openDialog("print")}
-              onDocumentation={() => workspaceStore.commands.openDialog("documentation")}
-              onAbout={() => workspaceStore.commands.openDialog("about")}
-            />,
-            applicationMenuMountElement,
-          )
-        : null}
       <WorkspaceHeader
         itemCount={itemCount}
         openIssueCount={dossierIssues.length}
         store={workspaceStore}
+        saveStatusStore={saveStatusStore}
         onSelectTab={selectWorkspaceTab}
+        onNew={() => {
+          workspaceStore.commands.selectTab("dossier");
+          workspaceStore.commands.openDialog("new");
+        }}
+        onFile={() => workspaceStore.commands.openDialog("file")}
+        onPrint={() => workspaceStore.commands.openDialog("print")}
+        onDocumentation={() => workspaceStore.commands.openDialog("documentation")}
+        onAbout={() => workspaceStore.commands.openDialog("about")}
       />
       {hierarchyMountElement
         ? createPortal(
@@ -326,6 +320,7 @@ export function EditorApp({
               onZoomIn={() => situationCanvasAdapter.zoomIn()}
               onZoomOut={() => situationCanvasAdapter.zoomOut()}
               onZoomToFit={() => situationCanvasAdapter.zoomToFit()}
+              situationWorkspaceElement={situationWorkspaceElement}
             />,
             commandBarMountElement,
           )

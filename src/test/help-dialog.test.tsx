@@ -25,7 +25,7 @@ describe("HelpDialog", () => {
 
     expect(screen.getByRole("link", { name: "Open de online versie" })).toHaveAttribute(
       "href",
-      "https://eendraadschema.goethals-jacobs.be",
+      "https://eendraadschema.mystack.be",
     );
     fireEvent.click(screen.getByRole("button", { name: "Sluiten" }));
     expect(onClose).toHaveBeenCalledOnce();

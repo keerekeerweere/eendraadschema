@@ -26,15 +26,15 @@ test("keeps new-document, documentation, and contact flows inside React dialogs"
   await page.getByLabel("Fasen").selectOption("4");
   await page.getByLabel("Hoofdzekering (A)").fill("40");
   await page.getByRole("button", { name: "Start met een leeg schema" }).click();
-  await expect(page.getByRole("heading", { name: "Werk per kring, niet per tekening" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Je elektrisch dossier" })).toBeVisible();
 
-  await page.getByText("Hulp", { exact: true }).click();
-  await page.getByRole("button", { name: "Documentatie" }).click();
+  await page.getByLabel("Applicatiemenu openen").click();
+  await page.getByRole("button", { name: "Handleiding" }).click();
   await expect(page.getByRole("dialog", { name: "Documentatie" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open handleiding" })).toHaveCount(2);
   await page.getByRole("button", { name: "Sluiten" }).click();
 
-  await page.getByText("Hulp", { exact: true }).click();
+  await page.getByLabel("Applicatiemenu openen").click();
   await page.getByRole("button", { name: "Info en contact" }).click();
   await expect(page.getByRole("dialog", { name: "Info en contact" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open de online versie" })).toBeVisible();
@@ -69,6 +69,39 @@ test("keeps the workspace compact with adjustable sidebars and a placement queue
   await expect(placementQueue).toContainText(/van \d+ veldsymbolen geplaatst/);
   await expect(page.getByLabel("Kring")).toBeVisible();
   await expect(page.getByRole("button", { name: "Plaats" }).first()).toBeVisible();
+});
+
+test("keeps navigation, details, and situation actions reachable on narrow screens", async ({ page }) => {
+  await loadExample(page, 0);
+  await page.setViewportSize({ width: 1024, height: 768 });
+
+  const navigationButton = page.getByRole("button", { name: "Navigatie", exact: true });
+  const detailsButton = page.getByRole("button", { name: "Details", exact: true });
+  await navigationButton.click();
+  await expect(page.locator("#react-workspace-sidebar")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(navigationButton).toBeFocused();
+  await expect(page.locator("#react-workspace-sidebar")).toBeHidden();
+
+  await detailsButton.click();
+  await expect(page.locator("#properties_col")).toBeVisible();
+  await page.getByRole("button", { name: "Paneel sluiten" }).last().click();
+  await expect(detailsButton).toBeFocused();
+
+  await page.getByRole("navigation", { name: "Werkruimteweergave" }).getByRole("button", { name: "Situatieschema" }).click();
+  const noticeOk = page.getByRole("button", { name: "OK", exact: true });
+  if (await noticeOk.isVisible()) await noticeOk.click();
+  await expect(page.getByRole("button", { name: "Achtergrond toevoegen" })).toBeVisible();
+  await page.getByRole("button", { name: "Meer acties" }).click();
+  await expect(page.getByRole("group", { name: "Meer acties" }).getByRole("button", { name: "Passend tonen" })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 768 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.keyboard.press("Escape");
+  for (const tab of ["Dossier", "Eéndraadschema", "Bordindeling"]) {
+    await page.getByRole("navigation", { name: "Werkruimteweergave" }).getByRole("button", { name: tab }).click();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  }
 });
 
 test("creates a circuit through the dossier under the selected board", async ({ page }) => {
@@ -115,13 +148,13 @@ test("builds a board layout by size, click, and drag-and-drop", async ({ page })
   await expect(page.getByText("12 modules × 2 rijen")).toBeVisible();
 
   await page.getByRole("button", { name: "Lege positie Rij 1, module 1", exact: true }).click();
-  const placementDialog = page.getByRole("form", { name: "Kring op lege positie plaatsen" });
+  const placementDialog = page.getByRole("form", { name: "Module op lege positie plaatsen" });
   await expect(placementDialog).toBeVisible();
-  await placementDialog.getByLabel("Breedte in modules").fill("2");
-  await placementDialog.getByRole("button", { name: "Kring plaatsen" }).click();
+  await placementDialog.getByLabel("Modulebreedte").fill("2");
+  await placementDialog.getByRole("button", { name: "Module plaatsen" }).click();
   await expect(page.getByText("12 modules × 2 rijen")).toBeVisible();
 
-  const palette = page.getByLabel("Kringen van het verdeelbord");
+  const palette = page.getByLabel("Modules van het verdeelbord");
   const draggableCircuit = palette.locator('button[draggable="true"]').first();
   await draggableCircuit.locator("xpath=..").getByRole("spinbutton").fill("3");
   await draggableCircuit.dragTo(page.getByRole("button", { name: "Lege positie Rij 2, module 3", exact: true }));
@@ -154,6 +187,87 @@ test("adds components at branch ends and between drawn components", async ({ pag
 
   await expect(page.locator("#react-hierarchy-root [aria-current='true']")).toContainText("Contactdoos");
   await expect(page.locator(".vite-error-overlay")).toHaveCount(0);
+});
+
+test("keeps nearby schematic plus controls individually visible", async ({ page }) => {
+  await loadExample(page, 0);
+  const controls = page.getByRole("button", { name: /^Onderdeel .* (toevoegen|invoegen)$/ });
+  const rectangles = await controls.evaluateAll(buttons => buttons.map(button => {
+    const box = button.getBoundingClientRect();
+    return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+  }));
+  expect(rectangles.length).toBeGreaterThan(2);
+  for (let first = 0; first < rectangles.length; first += 1) {
+    for (let second = first + 1; second < rectangles.length; second += 1) {
+      const a = rectangles[first];
+      const b = rectangles[second];
+      const overlapWidth = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const overlapHeight = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      expect(overlapWidth <= 0 || overlapHeight <= 0, `Overlapping plus controls ${first} and ${second}: ${JSON.stringify(a)} ${JSON.stringify(b)}`).toBe(true);
+    }
+  }
+});
+
+test("projects an insertion on the drawing before committing it", async ({ page }) => {
+  await loadExample(page, 1);
+  await page.getByRole("button", { name: /Onderdeel aan het begin van Kring A toevoegen/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Onderdeel toevoegen" });
+  await dialog.getByRole("button", { name: "Omvormer" }).hover();
+  await expect(page.locator("[data-insertion-preview]")).toBeVisible();
+  await expect(dialog.getByRole("status")).toContainText("Voorbeeld: Omvormer");
+  await expect(page.locator('[data-insertion-preview] rect[stroke="#2563eb"]')).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("[data-insertion-preview]")).toHaveCount(0);
+  await expect(page.locator("#EDS > svg")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Onderdeel na Omvormer.*toevoegen/ })).toHaveCount(0);
+});
+
+test("adds a board before circuit contents and removes it with Ctrl+minus", async ({ page }) => {
+  await loadExample(page, 1);
+  await page.getByRole("button", { name: /Onderdeel aan het begin van Kring A toevoegen/ }).click();
+  await page.getByRole("dialog", { name: "Onderdeel toevoegen" }).getByRole("button", { name: "Bord" }).click();
+
+  const boardName = page.getByRole("heading", { name: "Elektrische hiërarchie" }).locator("xpath=..");
+  await expect(boardName).toContainText("Verdeelbord");
+  await page.keyboard.down("Control");
+  const removeBoard = page.getByRole("button", { name: /Verdeelbord .* verwijderen/ }).first();
+  await expect(removeBoard).toBeVisible();
+  await removeBoard.click();
+  await page.getByRole("dialog", { name: "Onderdeel verwijderen" }).getByRole("button", { name: "Dit onderdeel en alles erachter verwijderen" }).click();
+  await page.keyboard.up("Control");
+  await expect(boardName).toContainText("Hoofdbord");
+});
+
+test("inserts a connection between the first circuit and a changeover switch", async ({ page }) => {
+  await loadExample(page, 1);
+  await page.getByRole("button", { name: /Onderdeel aan het begin van Kring A toevoegen/ }).click();
+  await page.getByRole("dialog", { name: "Onderdeel toevoegen" }).getByRole("button", { name: "Omschakelaar" }).click();
+
+  const beforeSwitch = page.getByRole("button", { name: /Onderdeel vóór Omschakelaar.*invoegen/ });
+  await expect(beforeSwitch).toBeVisible();
+  await beforeSwitch.click();
+  const dialog = page.getByRole("dialog", { name: "Onderdeel toevoegen" });
+  const existingConnections = await page.locator("#react-hierarchy-root [data-hierarchy-item-id]").filter({ hasText: "Aansluiting" }).count();
+  await expect(dialog.getByRole("button", { name: "Aansluiting" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Aansluiting" }).hover();
+  await expect(page.locator('[data-insertion-preview] rect[stroke="#2563eb"]')).toBeVisible();
+  await dialog.getByRole("button", { name: "Aansluiting" }).click();
+  await expect(page.locator("#react-hierarchy-root [data-hierarchy-item-id]").filter({ hasText: "Aansluiting" })).toHaveCount(existingConnections + 1);
+});
+
+test("removes an inverter and reconnects its downstream item", async ({ page }) => {
+  await loadExample(page, 1);
+  await page.getByRole("button", { name: /Onderdeel aan het begin van Kring A toevoegen/ }).click();
+  await page.getByRole("dialog", { name: "Onderdeel toevoegen" }).getByRole("button", { name: "Omvormer" }).click();
+  await page.getByRole("button", { name: /Onderdeel na Omvormer.*toevoegen/ }).click();
+  await page.getByRole("dialog", { name: "Onderdeel toevoegen" }).getByRole("button", { name: "Batterij" }).click();
+  await page.keyboard.down("Control");
+  await page.getByRole("button", { name: /^Omvormer.*verwijderen$/ }).click();
+  await page.keyboard.up("Control");
+  await page.getByRole("dialog", { name: "Onderdeel verwijderen" }).getByRole("button", { name: "Alleen dit onderdeel verwijderen en de rest opnieuw verbinden" }).click();
+  await expect(page.getByRole("dialog", { name: "Onderdeel verwijderen" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Onderdeel na Omvormer.*toevoegen/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Onderdeel na Batterij.*toevoegen/ })).toBeVisible();
 });
 
 test("shows on-item removal only while Ctrl is held", async ({ page }) => {
@@ -393,7 +507,8 @@ test("situation plan React controls manage pages", async ({ page }) => {
 test("print page renders a preview through the print adapter", async ({ page }) => {
   await loadExample(page, 1);
 
-  await page.getByRole("navigation", { name: "Applicatiemenu" }).getByRole("button", { name: "Print" }).click();
+  await page.getByLabel("Applicatiemenu openen").click();
+  await page.getByRole("navigation", { name: "Applicatiemenu" }).getByRole("button", { name: "Afdrukken en exporteren" }).click();
   const printDialog = page.getByRole("dialog", { name: "Afdrukken" });
   await expect(printDialog).toBeVisible();
   await expect(printDialog.getByRole("button", { name: "PDF genereren" })).toBeVisible();

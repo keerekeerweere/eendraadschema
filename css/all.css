@@ -4,7 +4,7 @@
   :root {
     --selectPadding: 2;
     --paperPadding: 10px;
-    --menu-height: 40px;
+    --menu-height: 0px;
     --ribbon-height: 56px;
     --status-bar-height: 0px;
     --react-shell-height: 64px;
@@ -33,6 +33,14 @@
   @media (max-width: 72rem) {
     #react-workspace-sidebar,
     #properties_col { display: none !important; }
+
+    #react-workspace-sidebar.workspace-drawer-open,
+    #properties_col.workspace-drawer-open {
+      display: block !important;
+      z-index: 50;
+      width: min(88vw, 22rem) !important;
+      box-shadow: 0 20px 45px rgb(15 23 42 / 0.22);
+    }
 
     #react-board-layout-root,
     #canvas_2col,

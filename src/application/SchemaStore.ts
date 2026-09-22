@@ -87,12 +87,12 @@ export type AgentGraphOperation =
   | Readonly<{ kind: "create-placement-task"; itemId: number; destination: PlacementTaskDestination; locationHint?: string }>;
 
 export interface SchemaCommands {
-  addItem(parentId: number | null, type: string): number;
+  addItem(parentId: number | null, type: string, position?: number): number;
   /** Creates and configures a circuit below a distribution board as one undoable change. */
-  addCircuit(boardId: string, changes: Readonly<CircuitPropertyChanges>): number;
+  addCircuit(boardId: string, changes: Readonly<CircuitPropertyChanges>, position?: number): number;
   insertItemBefore(itemId: number, type: string): number;
   addSituationOnlyItem(type: string): number;
-  deleteItem(itemId: number): void;
+  deleteItem(itemId: number, reconnectChildren?: boolean): void;
   moveItem(itemId: number, options: MoveItemOptions): void;
   changeItemType(itemId: number, type: string): void;
   updateItem(itemId: number, changes: Readonly<Record<string, unknown>>): void;
@@ -132,8 +132,13 @@ export interface SchemaCommands {
   redo(): void;
 }
 
+export type ItemInsertion =
+  | { readonly kind: "before"; readonly itemId: number; readonly type: string }
+  | { readonly kind: "child"; readonly parentId: number; readonly position: number; readonly type: string };
+
 export interface SchemaStore {
   getSnapshot(): SchemaSnapshot;
+  previewInsertion(insertion: ItemInsertion): { readonly svg: string; readonly itemId: number };
   subscribe(listener: () => void): () => void;
   readonly commands: SchemaCommands;
 }

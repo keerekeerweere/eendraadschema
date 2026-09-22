@@ -17,6 +17,7 @@ const numberFields: readonly ConfiguredEditorField[] = [
   { key: "number", label: "Nummer", visible: (properties) => properties.canEditNumber },
 ];
 const addressField: ConfiguredEditorField = { key: "address", label: "Adres of tekst" };
+const quantityField: ConfiguredEditorField = { key: "quantity", label: "Aantal parallel" };
 const textLayoutFields: readonly ConfiguredEditorField[] = [
   { key: "text", label: "Tekst (nieuwe lijn = |)" },
   { key: "widthMode", label: "Breedte" },
@@ -55,7 +56,7 @@ function switchFields(includeMagneticContact: boolean): readonly ConfiguredEdito
 }
 
 function numbered(fields: readonly ConfiguredEditorField[]): ConfiguredItemEditorConfig {
-  return { fields: [...numberFields, ...fields, addressField] };
+  return { fields: [...numberFields, ...fields, quantityField, addressField] };
 }
 
 export const configuredItemEditorConfigs: Readonly<Record<string, ConfiguredItemEditorConfig>> = Object.freeze({
@@ -164,6 +165,7 @@ export const configuredItemEditorConfigs: Readonly<Record<string, ConfiguredItem
   ] },
   "Zekering/differentieel": { fields: [
     ...numberFields,
+    quantityField,
     { key: "protection", label: "Bescherming" },
     { key: "poleCount", label: "Aantal polen" },
     { key: "amperage", label: "Stroom (A)" },

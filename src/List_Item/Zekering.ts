@@ -226,6 +226,7 @@ export class Zekering extends Electro_Item {
         }
 
         mySVG.ydown = mySVG.ydown + 11 * (numlines-1);
+        mySVG.data += this.addMultiplicityToSVG(mySVG, 62, 18);
 
         // Selectief differentieel tekenen indien van toepassing
 

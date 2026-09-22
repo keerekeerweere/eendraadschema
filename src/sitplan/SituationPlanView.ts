@@ -10,6 +10,7 @@ import { legacyUi } from "../ui/legacyStyles";
 import type { Hierarchical_List } from "../Hierarchical_List";
 import { SITUATION_ZOOM_INTERVAL } from "./SituationPlanConfig";
 import type { NoticeStore } from "../application/NoticeStore";
+import { showToastNotice } from "../application/ToastNotice";
 
 export interface SituationPlanSelection {
     readonly elementIds: readonly string[];
@@ -902,7 +903,7 @@ export class SituationPlanView {
             this.redraw();
             this.selectOneBox(element?.boxref ?? null); // We moeten dit na redraw doen anders bestaat de box mogelijk nog niet
         } else {
-            alert('Geen geldig ID ingegeven!');
+            showToastNotice('Geen geldig ID ingegeven!');
         }
     }
 

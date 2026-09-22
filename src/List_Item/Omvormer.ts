@@ -71,7 +71,6 @@ export class Omvormer extends Electro_Item {
         let heightunaltered = mySVG.yup + mySVG.ydown;
         let height = heightunaltered;
         if (height < 60) height = 60;
-        height = Math.max(height,svgTextWidth(htmlspecialchars(text),10,'') + 25);
 
         // Nu bepalen we hoeveel van de hoogte we effectief in het vierkant willen plaatsen
         // onder bepaade omstandigheden maken we gewoon een blokje, en schalen we niet alles op
@@ -79,7 +78,7 @@ export class Omvormer extends Electro_Item {
         let highlineOffset = Math.max(0,heightunaltered/2 - mySVG.lastChildyup);
         let rectangleHeight = height;
         if ((this.getNumChilds() <= 1) && (lowlineOffset < 20) && (highlineOffset < 20)) {
-            rectangleHeight = Math.max(60,svgTextWidth(htmlspecialchars(text),10,'') + 25);
+            rectangleHeight = Math.max(60, heightunaltered);
         }
 
         // Parameters van mySVG aanpassen omdat mySVG nu de Omvormer gaat beschrijven
@@ -110,21 +109,20 @@ export class Omvormer extends Electro_Item {
 
         // Tekst plaatsen
 
+        let labelY = height + 10;
         if (trimString(text) !== "") {
-            const textX = 49;
-            const textY = mySVG.yup;
-            const fontSize = 10;
-            const padding = 2;
-            const textWidth = svgTextWidth(htmlspecialchars(text), fontSize, '');
-            const rectWidth = textWidth + padding * 2;
-            const rectHeight = fontSize + padding * 2;
+            const textWidth = svgTextWidth(text, 10, "");
+            mySVG.xright = Math.max(mySVG.xright, 29 + textWidth - mySVG.xleft);
+            mySVG.data += `<rect x="19" y="${labelY - 11}" width="${textWidth + 10}" height="15" fill="white" />`;
+            mySVG.data += `<text x="24" y="${labelY}" font-family="Arial, Helvetica, sans-serif" font-size="10">${text}</text>`;
+            mySVG.ydown += 15;
+            labelY += 15;
+        }
 
-            mySVG.data += `<rect x="${textX-4 - rectHeight/2}" y="${textY - rectWidth / 2}" width="${rectHeight}" height="${rectWidth}" fill="white" />`;
-
-            mySVG.data += '<text x="' + textX + '" ' + 'y="' + textY + '" '
-                +  'transform="rotate(90 ' + textX + ',' + textY + ')" '
-                + 'style="text-anchor:middle" font-family="Arial, Helvetica, sans-serif" font-size="10"' + '>'
-                + text + '</text>';
+        if (Number(this.props.multiplicity ?? 1) > 1) {
+            mySVG.data += this.addMultiplicityToSVG(mySVG, 46, labelY);
+            mySVG.ydown += 15;
+            labelY += 15;
         }
 
         // Symbolen toevoegen voor wisselstroom en gelijkstroom
@@ -133,7 +131,7 @@ export class Omvormer extends Electro_Item {
                    +  `<line x1="66" y1="${12 + (height-rectangleHeight)/2}" x2="66" y2="${27 + (height-rectangleHeight)/2}" stroke="black" stroke-dasharray="3" />` 
                    +  `<line x1="62" y1="${12 + (height-rectangleHeight)/2}" x2="62" y2="${27 + (height-rectangleHeight)/2}" stroke="black" />`;
 
-        mySVG.data += this.addAddressToSVG(mySVG,height+10,15,(70-mySVG.xright)/2-1);
+        mySVG.data += this.addAddressToSVG(mySVG,labelY,15,(70-mySVG.xright)/2-1);
 
         return(mySVG);
 

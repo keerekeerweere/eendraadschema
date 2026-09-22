@@ -87,7 +87,7 @@ function AboutContent() {
         <p className="mb-3 mt-0">Gebruik de online versie voor het contactformulier en de meest recente publieke versie.</p>
         <a
           className="inline-flex rounded-md bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800"
-          href="https://eendraadschema.goethals-jacobs.be"
+          href="https://eendraadschema.mystack.be"
           target="_blank"
           rel="noopener noreferrer"
         >

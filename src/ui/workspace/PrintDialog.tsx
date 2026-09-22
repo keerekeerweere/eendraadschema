@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PrintService } from "../../application/PrintService";
 import type { SvgExportService } from "../../application/SvgExportService";
 import type { DossierIssue } from "../../application/DossierReader";
+import { ui } from "../uiStyles";
 
 interface PrintDialogProps {
   readonly printService: PrintService;
@@ -39,14 +40,14 @@ export function PrintDialog({ printService, svgExportService, onClose, dossierIs
               <p className="m-0 text-xs font-semibold uppercase tracking-wide text-blue-700">Uitvoer</p>
               <h2 id="print-dialog-title" className="my-1 text-2xl font-bold">Afdrukken</h2>
             </div>
-            <button type="button" className="rounded px-2 py-1 text-xl hover:bg-neutral-100" aria-label="Sluiten" onClick={onClose}>×</button>
+            <button type="button" className="grid size-10 place-items-center rounded-lg text-xl hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-700" aria-label="Sluiten" onClick={onClose}>×</button>
           </div>
           <div className="mt-5 grid gap-3">
             {dossierIssues.length > 0 ? <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><strong>Documentatie nakijken ({dossierIssues.length})</strong><ul className="mb-0 mt-1 pl-4">{dossierIssues.slice(0, 3).map(issue => <li key={issue.id}>{issue.message}</li>)}</ul><p className="mb-0 mt-2">U kunt enkel verder als expliciet onvolledig concept.</p></div> : null}
             <label className="grid gap-1 text-sm font-semibold">
               Papierformaat
               <select
-                className="rounded border border-neutral-300 px-3 py-2"
+                className={ui.field}
                 value={state.paperSize}
                 onChange={(event) => {
                   printService.updateSettings({ paperSize: event.target.value === "A3" ? "A3" : "A4" });
@@ -60,7 +61,7 @@ export function PrintDialog({ printService, svgExportService, onClose, dossierIs
             <label className="grid gap-1 text-sm font-semibold">
               Resolutie
               <select
-                className="rounded border border-neutral-300 px-3 py-2"
+                className={ui.field}
                 value={state.dpi}
                 onChange={(event) => {
                   printService.updateSettings({ dpi: Number(event.target.value) });
@@ -198,11 +199,11 @@ export function PrintDialog({ printService, svgExportService, onClose, dossierIs
             </label>
             <label className="grid gap-1 text-sm font-semibold">
               PDF-bestandsnaam
-              <input className="rounded border border-neutral-300 px-3 py-2" value={pdfFilename} onChange={event => setPdfFilename(event.target.value)} />
+              <input className={ui.field} value={pdfFilename} onChange={event => setPdfFilename(event.target.value)} />
             </label>
             <button
               type="button"
-              className="rounded bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+              className={ui.primaryButton}
               disabled={!validPageRange}
               onClick={() => {
                 if (!status.current) return;
@@ -238,8 +239,8 @@ export function PrintDialog({ printService, svgExportService, onClose, dossierIs
               </select>
             </label>
             <div className="flex gap-2">
-              <input className="rounded border border-neutral-300 px-3 py-2 text-sm" aria-label="SVG-bestandsnaam" value={svgFilename} onChange={event => setSvgFilename(event.target.value)} />
-              <button type="button" className="rounded border border-neutral-300 px-3 py-2 text-sm font-semibold hover:bg-neutral-50" disabled={!previewSvg} onClick={() => svgExportService.download(previewSvg, svgFilename)}>
+              <input className={ui.field} aria-label="SVG-bestandsnaam" value={svgFilename} onChange={event => setSvgFilename(event.target.value)} />
+              <button type="button" className={`${ui.button} text-sm font-semibold`} disabled={!previewSvg} onClick={() => svgExportService.download(previewSvg, svgFilename)}>
                 SVG downloaden
               </button>
             </div>

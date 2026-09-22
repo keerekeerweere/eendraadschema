@@ -31,6 +31,7 @@ const ITEM_POLICIES: Readonly<Record<string, InstallationItemPolicy>> = Object.f
   Bord: STRUCTURAL_POLICY,
   Container: STRUCTURAL_POLICY,
   Leiding: STRUCTURAL_POLICY,
+  Omschakelaarpoort: STRUCTURAL_POLICY,
   Splitsing: STRUCTURAL_POLICY,
   Verlenging: STRUCTURAL_POLICY,
   "Vrije tekst": STRUCTURAL_POLICY,

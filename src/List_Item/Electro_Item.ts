@@ -1,5 +1,5 @@
 import { List_Item } from "./List_Item";
-import { htmlspecialchars, deepClone } from "../general";
+import { htmlspecialchars, deepClone, svgTextWidth } from "../general";
 import { SVGSymbols } from "../SVGSymbols";
 import { SVGelement } from "../SVGelement";
 import { Hierarchical_List } from "../Hierarchical_List";
@@ -241,6 +241,15 @@ export class Electro_Item extends List_Item {
       mySVG.ydown = mySVG.ydown + godown;
     }
     return returnstr;
+  }
+
+  addMultiplicityToSVG(mySVG: SVGelement, x: number, y: number): string {
+    const quantity = Number(this.props.multiplicity ?? 1);
+    if (!Number.isInteger(quantity) || quantity <= 1) return "";
+    const label = `×${quantity}`;
+    const width = svgTextWidth(label, 10, "");
+    mySVG.xright = Math.max(mySVG.xright, x + width / 2 + 2 - mySVG.xleft);
+    return `<text data-item-multiplicity="true" x="${x}" y="${y}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10">${label}</text>`;
   }
 
   // -- Make the SVG for the electro item, placeholder for derived classes --

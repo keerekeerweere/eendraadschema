@@ -10,6 +10,7 @@ import type { EditorStore } from "../../application/EditorStore";
 import type { SchemaStore } from "../../application/SchemaStore";
 import type { BoardLayoutPlacement } from "../../domain/BoardLayout";
 import type { HierarchyViewNode } from "../../application/SchemaDocumentReader";
+import type { SchemaPropertyReader } from "../../application/SchemaPropertyReader";
 import { useEditorSnapshot } from "../useEditorSnapshot";
 import { useSchemaSnapshot } from "../useSchemaSnapshot";
 
@@ -49,10 +50,11 @@ function circuitName(item: { readonly type?: string; readonly label: string; rea
 
 function groupCircuitsByProtection(
   circuits: readonly HierarchyViewNode[],
+  properties: SchemaPropertyReader,
 ): readonly [string, readonly HierarchyViewNode[]][] {
   const groups = new Map<string, HierarchyViewNode[]>();
   for (const circuit of circuits) {
-    const protection = circuit.summary.protection ?? "";
+    const protection = properties.getCircuit(circuit.id)?.protection ?? "";
     const group = groups.get(protection) ?? [];
     group.push(circuit);
     groups.set(protection, group);
@@ -80,6 +82,7 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
   const [widths, setWidths] = useState<Readonly<Record<number, number>>>({});
   const [moduleCapacity, setModuleCapacity] = useState("18");
   const [rowCount, setRowCount] = useState("3");
+  const [formatOpen, setFormatOpen] = useState(!layout?.rails.length);
   const [pendingSlot, setPendingSlot] = useState<BoardSlot | null>(null);
   const [dialogCircuitId, setDialogCircuitId] = useState("");
   const [dialogWidth, setDialogWidth] = useState("1");
@@ -93,12 +96,17 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
     setSelectedCircuitId(null);
     setPendingSlot(null);
     setError("");
+    setFormatOpen(!layout?.rails.length);
   }, [board?.id]);
 
   useEffect(() => {
     setModuleCapacity(String(layout?.rails[0]?.moduleCapacity ?? 18));
     setRowCount(String(layout?.rails.length || 3));
   }, [layout?.rails.length, layout?.rails[0]?.moduleCapacity]);
+
+  useEffect(() => {
+    if (!layout?.rails.length) setFormatOpen(true);
+  }, [layout?.rails.length]);
 
   useEffect(() => {
     if (!selectedCircuitAvailable) {
@@ -127,10 +135,11 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
 
   function configureBoard(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    run(() => schemaStore.commands.configureBoardLayout(board.id, {
+    const configured = run(() => schemaStore.commands.configureBoardLayout(board.id, {
       moduleCapacity: Number(moduleCapacity),
       rowCount: Number(rowCount),
     }));
+    if (configured) setFormatOpen(false);
   }
 
   function getCircuitWidth(itemId: number): number {
@@ -191,11 +200,12 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
   const railById = new Map((layout?.rails ?? []).map(rail => [rail.id, rail]));
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-neutral-100 text-neutral-900" aria-label="Fysieke bordindeling">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-neutral-200 bg-white px-5 py-4">
+    <section className="flex h-full min-h-0 flex-col bg-slate-50 text-slate-900" aria-label="Fysieke bordindeling">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 max-[72rem]:pt-14">
         <div>
           <p className="m-0 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Bordindeling</p>
           <h1 className="mb-0 mt-1 text-xl font-semibold">Stel je verdeelbord samen</h1>
+          <p className="mb-0 mt-1 text-sm text-slate-600">{layout?.rails.length ? "Plaats de resterende modules op een vrije positie." : "Stap 1: kies het formaat. Daarna kun je modules plaatsen."}</p>
         </div>
         <label className="grid min-w-56 gap-1 text-xs font-semibold text-neutral-600">
           Verdeelbord
@@ -212,10 +222,11 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
       {error ? <p className="m-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">{error}</p> : null}
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[19rem_minmax(0,1fr)]">
-        <aside className="overflow-y-auto border-r border-neutral-200 bg-white" aria-label="Modules van het verdeelbord">
-          <form className="grid grid-cols-2 gap-2 border-b border-neutral-200 p-4" onSubmit={configureBoard}>
+        <aside className="overflow-y-auto border-r border-slate-200 bg-white max-lg:max-h-80" aria-label="Modules van het verdeelbord">
+          <details className="border-b border-slate-200" open={formatOpen} onToggle={event => setFormatOpen(event.currentTarget.open)}>
+          <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-600 focus-visible:outline-2 focus-visible:outline-blue-700 [&::-webkit-details-marker]:hidden">Bordformaat <span className="float-right text-base leading-none" aria-hidden="true">{formatOpen ? "−" : "+"}</span></summary>
+          <form className="grid grid-cols-2 gap-2 px-4 pb-4" onSubmit={configureBoard}>
             <div className="col-span-2">
-              <p className="m-0 text-xs font-semibold uppercase tracking-wide text-neutral-500">Bordformaat</p>
               <p className="mb-1 mt-1 text-sm text-neutral-600">{board.name}{board.location ? ` · ${board.location}` : ""}</p>
             </div>
             <label className="grid gap-1 text-xs font-medium text-neutral-600">
@@ -226,13 +237,14 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
               Aantal rijen
               <input className={`${fieldClass} min-w-0`} aria-label="Aantal rijen" type="number" min="1" max="12" value={rowCount} onChange={event => setRowCount(event.target.value)} />
             </label>
-            <button type="submit" className="col-span-2 min-h-10 rounded-md bg-neutral-900 px-3 text-sm font-semibold text-white hover:bg-neutral-700">
+            <button type="submit" className="col-span-2 min-h-11 rounded-lg bg-blue-700 px-3 text-sm font-semibold text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">
               Formaat toepassen
             </button>
           </form>
+          </details>
 
           <CircuitSection title="Nog te plaatsen" count={unplacedCircuits.length}>
-            {groupCircuitsByProtection(unplacedCircuits).map(([protection, groupedCircuits]) => (
+            {groupCircuitsByProtection(unplacedCircuits, schema.properties).map(([protection, groupedCircuits]) => (
               <li key={protection} className="border-b border-neutral-200">
                 <h3 className="m-0 bg-neutral-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-600">{protectionLabel(protection)}</h3>
                 <ul className="m-0 list-none p-0">
@@ -386,6 +398,7 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
                             key={placement.itemId}
                             placement={placement}
                             item={schema.document.getItem(placement.itemId)}
+                            protection={schema.properties.getCircuit(placement.itemId)?.protection}
                             selected={editor.selectedItemId === placement.itemId}
                             onSelect={() => editorStore.commands.selectItem(placement.itemId)}
                           />
@@ -413,7 +426,7 @@ export function BoardLayoutWorkspace({ schemaStore, editorStore }: BoardLayoutWo
             <label className="grid gap-1 text-xs font-semibold text-neutral-600">
               Module
               <select className={fieldClass} value={dialogCircuitId} onChange={event => setDialogCircuitId(event.target.value)}>
-                {groupCircuitsByProtection(unplacedCircuits).map(([protection, groupedCircuits]) => (
+                {groupCircuitsByProtection(unplacedCircuits, schema.properties).map(([protection, groupedCircuits]) => (
                   <optgroup key={protection} label={protectionLabel(protection)}>
                     {groupedCircuits.map(item => <option key={item.id} value={item.id}>{circuitName(item)}</option>)}
                   </optgroup>
@@ -451,9 +464,10 @@ function EmptyList({ children }: { readonly children: ReactNode }) {
   return <li className="px-3 py-4 text-sm text-neutral-500">{children}</li>;
 }
 
-function PlacedCircuit({ placement, item, selected, onSelect }: {
+function PlacedCircuit({ placement, item, protection, selected, onSelect }: {
   readonly placement: BoardLayoutPlacement;
   readonly item: HierarchyViewNode | undefined;
+  readonly protection: string | undefined;
   readonly selected: boolean;
   readonly onSelect: () => void;
 }) {
@@ -471,7 +485,7 @@ function PlacedCircuit({ placement, item, selected, onSelect }: {
       onClick={onSelect}
       title={`${label} · ${placement.moduleWidth} modules`}
     >
-      <span className="block w-full truncate text-[10px] font-semibold uppercase tracking-wide">{item ? protectionLabel(item.summary.protection) : "Onbekend"}</span>
+      <span className="block w-full truncate text-[10px] font-semibold uppercase tracking-wide">{protectionLabel(protection)}</span>
       <span className="block w-full truncate text-xs font-semibold">{label}</span>
       {item?.summary.text ? <span className="block w-full truncate text-[10px] text-neutral-500">{item.summary.text}</span> : null}
     </button>

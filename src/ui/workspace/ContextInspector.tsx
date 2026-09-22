@@ -12,7 +12,7 @@ type InspectorTab = "details" | "links" | "checks";
 
 export function ContextInspector({ context, issueCount, children, ...links }: ContextInspectorProps) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("details");
-  const tabs: readonly [InspectorTab, string][] = [["details", "Details"], ["links", "Koppelingen"], ["checks", "Checks"]];
+  const tabs: readonly [InspectorTab, string][] = [["details", "Details"], ["links", "Koppelingen"], ["checks", "Controles"]];
 
   function showDetailsAfter(action: () => void) {
     action();
@@ -20,13 +20,19 @@ export function ContextInspector({ context, issueCount, children, ...links }: Co
   }
 
   return (
-    <section className="min-h-full text-neutral-800" aria-label="Contextinspecteur">
-      <nav className="flex border-b border-neutral-200" aria-label="Inspecteursecties">
+    <section className="min-h-full bg-white text-slate-800" aria-label="Contextinspecteur">
+      {context?.itemLabel ? (
+        <header className="border-b border-slate-100 px-4 py-3">
+          <p className="m-0 truncate text-xs font-medium text-slate-500">{[context.boardName, context.circuitLabel].filter(Boolean).join(" › ")}</p>
+          <strong className="mt-1 block truncate text-sm text-slate-900">{context.itemLabel}</strong>
+        </header>
+      ) : null}
+      <nav className="flex border-b border-slate-200" aria-label="Inspecteursecties">
         {tabs.map(([tab, label]) => (
           <button
             key={tab}
             type="button"
-            className={activeTab === tab ? "border-b-2 border-blue-700 px-3 py-3 text-sm font-semibold text-blue-900" : "border-b-2 border-transparent px-3 py-3 text-sm font-semibold text-neutral-600 hover:bg-neutral-50"}
+            className={activeTab === tab ? "border-b-2 border-blue-700 px-3 py-3 text-sm font-semibold text-blue-900" : "border-b-2 border-transparent px-3 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-blue-700"}
             aria-current={activeTab === tab ? "page" : undefined}
             onClick={() => setActiveTab(tab)}
           >{label}</button>

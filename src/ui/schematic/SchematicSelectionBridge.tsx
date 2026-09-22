@@ -49,7 +49,7 @@ export function SchematicSelectionBridge({
     function schematicElements(): SVGGraphicsElement[] {
       return Array.from(
         previewElement.querySelectorAll<SVGGraphicsElement>("[data-schema-item-id]"),
-      );
+      ).filter(element => !element.closest("[data-insertion-preview]"));
     }
 
     function ensureHitArea(element: SVGGraphicsElement): void {
@@ -104,7 +104,7 @@ export function SchematicSelectionBridge({
     function revealFromTarget(target: EventTarget | null): void {
       if (!(target instanceof Element)) return;
       const element = target.closest<SVGGraphicsElement>("[data-schema-item-id]");
-      if (!element || !previewElement.contains(element)) return;
+      if (!element || !previewElement.contains(element) || element.closest("[data-insertion-preview]")) return;
       const itemId = Number(element.dataset.schemaItemId);
       if (!Number.isInteger(itemId) || !schema.document.getItem(itemId)) return;
       editorStore.commands.revealItem(
@@ -128,7 +128,7 @@ export function SchematicSelectionBridge({
     function handlePointerOver(event: PointerEvent): void {
       if (!(event.target instanceof Element)) return;
       const nextHovered = event.target.closest<SVGGraphicsElement>("[data-schema-item-id]");
-      if (!nextHovered || !previewElement.contains(nextHovered) || nextHovered === hoveredElement) return;
+      if (!nextHovered || !previewElement.contains(nextHovered) || nextHovered.closest("[data-insertion-preview]") || nextHovered === hoveredElement) return;
       const previousHovered = hoveredElement;
       hoveredElement = nextHovered;
       if (previousHovered) updateHighlight(previousHovered);

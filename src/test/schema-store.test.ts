@@ -586,6 +586,64 @@ describe("LegacySchemaStore", () => {
     expect(store.getSnapshot().document.getBoard(garageBoardId)?.feeder?.sourceCircuitId).toBe(feederId);
   });
 
+  it("registers a board added from a circuit and keeps its chosen sibling position", () => {
+    const { store, boardId } = createStore();
+    const feederId = store.commands.addItem(boardId, "Kring");
+    const existingId = store.commands.addItem(feederId, "Contactdoos");
+    const boardRootId = store.commands.addItem(feederId, "Bord", 0);
+    const document = store.getSnapshot().document;
+    const secondaryBoard = document.getBoardForItem(boardRootId);
+
+    expect(document.getChildren(feederId).map(item => item.id)).toEqual([boardRootId, existingId]);
+    expect(secondaryBoard?.feeder?.sourceCircuitId).toBe(feederId);
+    expect(document.getBoardRootItems(secondaryBoard!.id)[0]?.id).toBe(boardRootId);
+
+    const newCircuitId = store.commands.addItem(boardRootId, "Kring");
+    expect(store.getSnapshot().document.getBoardForItem(newCircuitId)?.id).toBe(secondaryBoard?.id);
+    store.commands.undo();
+    store.commands.undo();
+    expect(store.getSnapshot().document.getBoard(secondaryBoard!.id)).toBeUndefined();
+  });
+
+  it("registers a board inserted before a circuit and keeps that circuit beneath it", () => {
+    const { store, boardId } = createStore();
+    const feederId = store.commands.addItem(boardId, "Kring");
+    const circuitId = store.commands.addItem(feederId, "Kring");
+    const boardRootId = store.commands.insertItemBefore(circuitId, "Bord");
+    const document = store.getSnapshot().document;
+
+    expect(document.getItem(circuitId)?.parentId).toBe(boardRootId);
+    expect(document.getBoardForItem(boardRootId)?.feeder?.sourceCircuitId).toBe(feederId);
+    expect(document.getBoardForItem(circuitId)?.id).toBe(document.getBoardForItem(boardRootId)?.id);
+  });
+
+  it("creates a circuit at the requested position in its board", () => {
+    const { store } = createStore();
+    const firstId = store.commands.addCircuit("main", { nameMode: "manueel", name: "A" });
+    const lastId = store.commands.addCircuit("main", { nameMode: "manueel", name: "C" });
+    const middleId = store.commands.addCircuit("main", { nameMode: "manueel", name: "B" }, 1);
+    const rootId = store.getSnapshot().document.getBoard("main")!.rootItemIds[0];
+
+    expect(store.getSnapshot().document.getChildren(rootId).filter(item => item.type === "Kring").map(item => item.id)).toEqual([firstId, middleId, lastId]);
+  });
+
+  it("removes an inverter while reconnecting its children in order, with one undo", () => {
+    const { store, boardId } = createStore();
+    const circuit = store.commands.addItem(boardId, "Kring");
+    const inverter = store.commands.addItem(circuit, "Omvormer", 0);
+    const battery = store.commands.addItem(inverter, "Batterij", 0);
+    const solar = store.commands.addItem(inverter, "Zonnepaneel", 1);
+    const socket = store.commands.addItem(circuit, "Contactdoos", 1);
+
+    store.commands.deleteItem(inverter, true);
+    expect(store.getSnapshot().document.getChildren(circuit).map(item => item.id)).toEqual([battery, solar, socket]);
+    expect(store.getSnapshot().document.getItem(inverter)).toBeUndefined();
+    store.commands.undo();
+    expect(store.getSnapshot().document.getItem(battery)?.parentId).toBe(inverter);
+    expect(store.getSnapshot().document.getItem(solar)?.parentId).toBe(inverter);
+  });
+
+
   it("updates persistent document details through undoable commands", () => {
     const { store } = createStore();
     store.commands.updateDocumentDetails({

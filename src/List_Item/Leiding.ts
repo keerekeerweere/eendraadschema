@@ -1,5 +1,5 @@
 import { Electro_Item } from "./Electro_Item";
-import { htmlspecialchars } from "../general";
+import { htmlspecialchars, svgTextWidth } from "../general";
 import { SVGelement } from "../SVGelement";
 
 export class Leiding extends Electro_Item {
@@ -39,7 +39,8 @@ export class Leiding extends Electro_Item {
     toSVGVerticaal() {
         let mySVG:SVGelement = new SVGelement();
 
-        let height = 100;
+        const cableLabel = this.getCableLabel();
+        let height = Math.max(100, svgTextWidth(htmlspecialchars(cableLabel), 10, "") + 30);
 
         mySVG.xleft = 15; // ruimte links van de as voor symbolen (in buis, ondergronds, in/op wand)
         mySVG.xright = 20; // ruimte rechts van de as voor de naam van de kabel
@@ -51,7 +52,7 @@ export class Leiding extends Electro_Item {
                    +  "<text x=\"" + (mySVG.xleft+15) + "\" y=\"" + (80) + "\""
                    +  " transform=\"rotate(-90 " + (mySVG.xleft+15) + "," + (80) + ")"
                    +  "\" style=\"text-anchor:start\" font-family=\"Arial, Helvetica, sans-serif\" font-size=\"10\">"
-                   +  htmlspecialchars(this.props.type_kabel) + "</text>";
+                   +  htmlspecialchars(cableLabel) + "</text>";
 
         // Luchtleiding tekenen indien van toepassing
         if (this.props.kabel_locatie == "Luchtleiding") mySVG.data += '<circle cx="' + (mySVG.xleft) + '" cy="' + (20) + '" r="4" style="stroke:black;fill:none" />';
@@ -147,12 +148,21 @@ export class Leiding extends Electro_Item {
                 break;
         }
 
+        const cableLabel = this.getCableLabel();
+        mySVG.xright = Math.max(mySVG.xright, 15 + svgTextWidth(htmlspecialchars(cableLabel), 10, "") + 2 - mySVG.xleft);
         mySVG.data += '<text x="' + (15) + '" y="' + (39) + '" style="text-anchor:start" font-family="Arial, Helvetica, sans-serif" font-size="10">' 
-                       +  htmlspecialchars(this.props.type_kabel) + '</text>';
+                       +  htmlspecialchars(cableLabel) + '</text>';
         
         mySVG.data += "\n";
 
         return(mySVG);
+    }
+
+    private getCableLabel(): string {
+        const quantity = Number(this.props.multiplicity ?? 1);
+        return Number.isInteger(quantity) && quantity > 1
+            ? `${quantity}× ${this.props.type_kabel}`
+            : String(this.props.type_kabel ?? "");
     }
 
 }

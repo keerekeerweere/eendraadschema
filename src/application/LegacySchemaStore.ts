@@ -8,6 +8,8 @@ import {
 } from "../domain/DistributionBoard";
 import { structureFromJson } from "../legacy/persistence/EdsCodec";
 import { DocumentSnapshotHistory } from "./DocumentSnapshotHistory";
+import { LegacySchematicRenderStore } from "./SchematicRenderStore";
+import type { ItemInsertion } from "./SchemaStore";
 import { validateAndMapCircuitChanges } from "./CircuitPropertyValidation";
 import { validateAndMapSocketChanges } from "./SocketPropertyValidation";
 import {
@@ -116,6 +118,15 @@ export class LegacySchemaStore implements SchemaStore {
     return this.structure;
   }
 
+  previewInsertion(insertion: ItemInsertion): { svg: string; itemId: number } {
+    const staged = new LegacySchemaStore(structureFromJson(this.serialize(), null, 0));
+    const itemId = insertion.kind === "before"
+      ? staged.commands.insertItemBefore(insertion.itemId, insertion.type)
+      : staged.commands.addItem(insertion.parentId, insertion.type, insertion.position);
+    const renderer = new LegacySchematicRenderStore(() => staged.getLegacyDocument());
+    return { svg: renderer.getSnapshot().svg, itemId };
+  }
+
   /**
    * Transitional seam for legacy handlers that still mutate or replace the
    * authoritative document outside SchemaCommands. It refreshes subscribers
@@ -132,11 +143,17 @@ export class LegacySchemaStore implements SchemaStore {
     this.publish();
   }
 
-  private addItem(parentId: number | null, type: string): number {
+  private addItem(parentId: number | null, type: string, position?: number): number {
     this.assertPublicItemType(type);
     const parent = this.getParent(parentId);
     this.assertChildAllowed(parent, type);
     this.assertParentCapacity(parent);
+    if (position !== undefined && (!Number.isInteger(position) || position < 0)) {
+      throw new SchemaCommandError("INVALID_POSITION", "De doelpositie moet een positief geheel getal zijn.");
+    }
+    const feeder = type === "Bord" && parent?.getType() === "Kring"
+      ? this.requireAvailableFeeder(parent.id)
+      : undefined;
 
     return this.commitTransaction(() => {
       let item: Electro_Item;
@@ -156,13 +173,18 @@ export class LegacySchemaStore implements SchemaStore {
           this.structure.insertChildAfterId(connector, item.id);
         }
       }
+      if (feeder) this.registerBoard(item, parent!.id, feeder.sourceBoardId, { name: `Verdeelbord ${item.id}` });
+      if (position !== undefined) this.moveToSiblingPosition(item.id, position);
 
       this.createRequiredPlacementTask(item.id, item.getType());
       return item.id;
     });
   }
 
-  private addCircuit(boardId: string, changes: Readonly<CircuitPropertyChanges>): number {
+  private addCircuit(boardId: string, changes: Readonly<CircuitPropertyChanges>, position?: number): number {
+    if (position !== undefined && (!Number.isInteger(position) || position < 0)) {
+      throw new SchemaCommandError("INVALID_POSITION", "De doelpositie moet een positief geheel getal zijn.");
+    }
     const board = this.requireBoard(boardId);
     const document = new LegacySchemaDocumentReader(this.structure);
     const parentNode = document.getAllItems().find((item) => (
@@ -187,6 +209,7 @@ export class LegacySchemaStore implements SchemaStore {
       const circuit = this.requireItem(placeholder.id);
       for (const [key, value] of Object.entries(legacyChanges)) circuit.props[key] = value;
       circuit.normalizeProperties();
+      this.moveToSiblingPosition(circuit.id, position);
       this.createRequiredPlacementTask(circuit.id, circuit.getType());
       return circuit.id;
     });
@@ -202,6 +225,9 @@ export class LegacySchemaStore implements SchemaStore {
       throw new SchemaCommandError("INVALID_CHANGE", "Voor een hoofdelement kan niets worden ingevoegd.");
     }
     this.assertChildAllowed(parent, type);
+    const feeder = type === "Bord" && parent.getType() === "Kring"
+      ? this.requireAvailableFeeder(parent.id)
+      : undefined;
 
     const candidate = this.structure.createItem(type);
     candidate.parent = parent.id;
@@ -219,6 +245,7 @@ export class LegacySchemaStore implements SchemaStore {
       this.structure.adjustTypeById(newItemId, type);
       item.parent = newItemId;
       this.structure.reSort();
+      if (feeder) this.registerBoard(this.requireItem(newItemId), parent.id, feeder.sourceBoardId, { name: `Verdeelbord ${newItemId}` });
       return newItemId;
     });
   }
@@ -236,9 +263,39 @@ export class LegacySchemaStore implements SchemaStore {
     });
   }
 
-  private deleteItem(itemId: number): void {
+  private deleteItem(itemId: number, reconnectChildren = false): void {
     const item = this.requireItem(itemId);
     this.assertUserEditable(item);
+    if (reconnectChildren) {
+      const board = this.structure.boards.find(candidate => candidate.rootItemIds.includes(itemId));
+      if (board && !board.feeder) throw new SchemaCommandError("BOARD_DEPENDENCY", "Het hoofdbord kan niet worden verwijderd.");
+      if (this.structure.boards.some(candidate => candidate.feeder?.sourceCircuitId === itemId || (board && candidate.feeder?.sourceBoardId === board.id))) {
+        throw new SchemaCommandError("BOARD_DEPENDENCY", "Pas eerst de voeding van de aangesloten verdeelborden aan.");
+      }
+      const parent = this.getParent(item.parent === 0 ? null : item.parent);
+      const children = this.structure.data.filter(candidate => candidate.parent === itemId && !(candidate as Electro_Item).isAttribuut()) as Electro_Item[];
+      for (const child of children) {
+        this.assertUserEditable(child);
+        this.assertPublicItemType(child.getType());
+        this.assertChildAllowed(parent, child.getType());
+      }
+      const siblings = this.structure.data.filter(candidate => candidate.parent === item.parent && !(candidate as Electro_Item).isAttribuut());
+      if (parent && siblings.length - 1 + children.length > parent.getMaxNumChilds()) {
+        throw new SchemaCommandError("INVALID_CHANGE", "Het vorige onderdeel kan niet alle resterende onderdelen aansluiten.");
+      }
+      const position = siblings.findIndex(candidate => candidate.id === itemId);
+      this.commitTransaction(() => {
+        for (const child of children) child.parent = item.parent;
+        this.structure.reSort();
+        this.structure.deleteById(itemId);
+        children.forEach((child, index) => this.moveToSiblingPosition(child.id, position + index));
+        if (board) this.structure.boards = this.structure.boards.filter(candidate => candidate.id !== board.id);
+        this.structure.boardLayouts = this.structure.boardLayouts.filter(layout => layout.boardId !== board?.id).map(layout => ({ ...layout, placements: layout.placements.filter(placement => placement.itemId !== itemId) }));
+        this.structure.placementTasks = this.structure.placementTasks.filter(task => task.itemId !== itemId);
+        this.removePlacementsOutsideTheirBoard();
+      });
+      return;
+    }
     this.assertNoBoardDependencyInSubtree(itemId);
     const deletedItemIds = this.collectSubtreeIds(itemId);
     this.commitTransaction(() => {
@@ -430,19 +487,25 @@ export class LegacySchemaStore implements SchemaStore {
       this.structure.insertChildAfterId(placeholder, circuit.id);
       this.structure.adjustTypeById(placeholder.id, "Bord");
       const boardItem = this.requireItem(placeholder.id);
+      this.moveToSiblingPosition(boardItem.id, undefined);
       boardItem.props.naam = name;
       boardItem.props.adres = this.optionalBoardText(properties.location) ?? "";
 
-      const boardId = this.uniqueBoardId(`board-${boardItem.id}`);
-      this.structure.boards = [...this.structure.boards, {
-        id: boardId,
-        name,
-        location: this.optionalBoardText(properties.location),
-        feeder: this.createFeeder(sourceBoardId, feederCircuitId, properties),
-        rootItemIds: [boardItem.id],
-      }];
-      return boardId;
+      return this.registerBoard(boardItem, feederCircuitId, sourceBoardId, properties);
     });
+  }
+
+  private registerBoard(boardItem: Electro_Item, feederCircuitId: number, sourceBoardId: string, properties: AddDistributionBoardProperties): string {
+    const boardId = this.uniqueBoardId(`board-${boardItem.id}`);
+    this.structure.boards = [...this.structure.boards, {
+      id: boardId,
+      name: properties.name,
+      location: this.optionalBoardText(properties.location),
+      feeder: this.createFeeder(sourceBoardId, feederCircuitId, properties),
+      rootItemIds: [boardItem.id],
+    }];
+    boardItem.props.naam = properties.name;
+    return boardId;
   }
 
   private updateDistributionBoard(
@@ -509,12 +572,14 @@ export class LegacySchemaStore implements SchemaStore {
     if (this.structure.boards.some((candidate) => candidate.feeder?.sourceBoardId === boardId)) {
       throw new SchemaCommandError("BOARD_DEPENDENCY", "Verwijder eerst de verdeelborden die vanuit dit bord worden gevoed.");
     }
+    const deletedItemIds = new Set(board.rootItemIds.flatMap(id => [...this.collectSubtreeIds(id)]));
     this.commitTransaction(() => {
       for (const rootItemId of board.rootItemIds) {
         if (this.structure.getElectroItemById(rootItemId) !== null) this.structure.deleteById(rootItemId);
       }
       this.structure.boards = this.structure.boards.filter((candidate) => candidate.id !== boardId);
       this.structure.boardLayouts = this.structure.boardLayouts.filter(layout => layout.boardId !== boardId);
+      this.structure.placementTasks = this.structure.placementTasks.filter(task => !deletedItemIds.has(task.itemId));
     });
   }
 

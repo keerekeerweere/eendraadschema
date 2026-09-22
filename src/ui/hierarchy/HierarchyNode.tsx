@@ -208,7 +208,8 @@ export function HierarchyNode({
           onAdd={(type) => runCommand(() => {
             const itemId = schemaStore.commands.addItem(node.id, type);
             editorStore.commands.expandItem(node.id);
-            editorStore.commands.selectItem(itemId);
+            const document = schemaStore.getSnapshot().document;
+            editorStore.commands.revealItem(itemId, document.getBoardForItem(itemId)?.id, [node.id]);
           })}
         />
       ) : null}

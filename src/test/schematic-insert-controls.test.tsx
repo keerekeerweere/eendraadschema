@@ -57,10 +57,57 @@ function renderTransferSwitchControls() {
     { container: overlayElement },
   );
 
-  return { store, switchId };
+  return { store, circuitId, switchId };
 }
 
 describe("SchematicInsertControls", () => {
+  it("previews an insertion without changing the document or undo history", () => {
+    const { store, circuitId } = renderControls();
+    const before = store.getSnapshot();
+    const serialized = store.getLegacyDocument().toJsonObject(false);
+    const preview = store.previewInsertion({ kind: "child", parentId: circuitId, type: "Omvormer", position: 0 });
+    expect(preview.svg).toContain(`data-schema-item-id="${preview.itemId}"`);
+    expect(store.getSnapshot()).toBe(before);
+    expect(store.getLegacyDocument().toJsonObject(false)).toBe(serialized);
+    expect(store.getSnapshot().document.getItem(preview.itemId)).toBeUndefined();
+  });
+  it("lets the user explicitly choose a parallel circuit or insertion in the connection", () => {
+    const { store, circuitId } = renderControls();
+    const parentId = store.getSnapshot().document.getItem(circuitId)!.parentId;
+    fireEvent.click(screen.getByRole("button", { name: /Onderdeel vóór Kring.*invoegen/ }));
+    const dialog = screen.getByRole("dialog", { name: "Onderdeel toevoegen" });
+    expect(within(dialog).getByRole("combobox")).toHaveValue("parallel");
+    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "before" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Kring" }));
+    const inserted = store.getSnapshot().document.getChildren(parentId)[0];
+    expect(store.getSnapshot().document.getItem(circuitId)?.parentId).toBe(inserted.id);
+  });
+
+  it("keeps plus controls at a shared junction separately clickable", () => {
+    renderControls();
+    const positions = screen.getAllByRole("button", { name: /^Onderdeel .* (toevoegen|invoegen)$/ })
+      .map(button => parseFloat((button as HTMLElement).style.left))
+      .sort((a, b) => a - b);
+
+    expect(positions.length).toBeGreaterThan(2);
+    for (let index = 1; index < positions.length; index += 1) {
+      expect(positions[index] - positions[index - 1]).toBeGreaterThanOrEqual(28);
+    }
+  });
+
+  it("adds a board at the chosen start of a circuit and opens that board", () => {
+    const { store, editorStore, circuitId, socketId } = renderControls();
+
+    fireEvent.click(screen.getByRole("button", { name: /Onderdeel aan het begin van Kring.*toevoegen/ }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Bord" }));
+
+    const [boardRoot] = store.getSnapshot().document.getChildren(circuitId);
+    expect(boardRoot.type).toBe("Bord");
+    expect(store.getSnapshot().document.getChildren(circuitId)[1]?.id).toBe(socketId);
+    expect(editorStore.getSnapshot().activeBoardId).toBe(store.getSnapshot().document.getBoardForItem(boardRoot.id)?.id);
+    expect(editorStore.getSnapshot().selectedItemId).toBe(boardRoot.id);
+  });
+
   it("adds an item at the end of a drawn branch", () => {
     const { store, editorStore, socketId } = renderControls();
 
@@ -103,6 +150,19 @@ describe("SchematicInsertControls", () => {
     expect(store.getSnapshot().document.getChildren(out2.id)[0]?.type).toBe("Kring");
   });
 
+  it("inserts a connection between a circuit and its changeover switch", () => {
+    const { store, circuitId, switchId } = renderTransferSwitchControls();
+    expect(store.getSnapshot().document.getItem(switchId)?.capabilities.allowedInsertBeforeTypes).toContain("Aansluiting");
+    expect(document.querySelector(`[data-schema-item-id="${switchId}"]`)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Onderdeel vóór Omschakelaar.*invoegen/ }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Aansluiting" }));
+
+    const connection = store.getSnapshot().document.getChildren(circuitId)[0];
+    expect(connection.type).toBe("Aansluiting");
+    expect(store.getSnapshot().document.getItem(switchId)?.parentId).toBe(connection.id);
+  });
+
   it("filters available item icons by name", () => {
     renderControls();
 
@@ -124,7 +184,7 @@ describe("SchematicInsertControls", () => {
     fireEvent.keyDown(window, { key: "Control", ctrlKey: true });
 
     expect(screen.getByRole("button", { name: "Contactdoos 1 verwijderen" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Kring.*verwijderen/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Kring.*verwijderen/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Bord.*verwijderen/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Contactdoos 1 verwijderen" }));

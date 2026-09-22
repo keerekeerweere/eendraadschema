@@ -34,6 +34,7 @@ const cableLocations = ["N/A", "Ondergronds", "Luchtleiding", "In wand", "Op wan
 const counts10 = Array.from({ length: 10 }, (_, index) => String(index + 1));
 const counts20 = Array.from({ length: 20 }, (_, index) => String(index + 1));
 const counts40 = Array.from({ length: 40 }, (_, index) => String(index + 1));
+const quantityField = { quantity: { legacyKey: "multiplicity", kind: "select", options: counts40, defaultValue: "1" } } as const satisfies Readonly<Record<string, ConfiguredPropertyDefinition>>;
 
 const numberFields = {
   numberMode: { legacyKey: "autonr", kind: "select", options: numberModes, defaultValue: "manueel" },
@@ -47,13 +48,13 @@ const addressField = {
 function numbered(
   fields: Readonly<Record<string, ConfiguredPropertyDefinition>>,
 ): ConfiguredItemPropertySchema {
-  return Object.freeze({ fields: Object.freeze({ ...numberFields, ...fields, ...addressField }) });
+  return Object.freeze({ fields: Object.freeze({ ...numberFields, ...fields, ...quantityField, ...addressField }) });
 }
 
 function numberedWithoutAddress(
   fields: Readonly<Record<string, ConfiguredPropertyDefinition>>,
 ): ConfiguredItemPropertySchema {
-  return Object.freeze({ fields: Object.freeze({ ...numberFields, ...fields }) });
+  return Object.freeze({ fields: Object.freeze({ ...numberFields, ...fields, ...quantityField }) });
 }
 
 function schema(
