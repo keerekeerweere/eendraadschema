@@ -137,8 +137,9 @@ test("adds components at branch ends and between drawn components", async ({ pag
   await expect(endTrigger).toBeVisible();
   await endTrigger.click();
   let dialog = page.getByRole("dialog", { name: "Onderdeel toevoegen" });
-  await dialog.getByRole("combobox").selectOption("Lichtpunt");
-  await dialog.getByRole("button", { name: "Toevoegen" }).click();
+  await dialog.getByRole("searchbox", { name: "Zoek onderdeel" }).fill("licht");
+  await expect(dialog.getByRole("button", { name: "Lichtpunt" }).locator("svg use")).toHaveAttribute("href", "#lamp");
+  await dialog.getByRole("button", { name: "Lichtpunt" }).click();
 
   const selectedItem = page.locator("#react-hierarchy-root [aria-current='true']");
   await expect(selectedItem).toContainText("Lichtpunt");
@@ -149,10 +150,35 @@ test("adds components at branch ends and between drawn components", async ({ pag
   await expect(betweenTrigger).toBeVisible();
   await betweenTrigger.click();
   dialog = page.getByRole("dialog", { name: "Onderdeel toevoegen" });
-  await dialog.getByRole("combobox").selectOption("Contactdoos");
-  await dialog.getByRole("button", { name: "Toevoegen" }).click();
+  await dialog.getByRole("button", { name: "Contactdoos" }).click();
 
   await expect(page.locator("#react-hierarchy-root [aria-current='true']")).toContainText("Contactdoos");
+  await expect(page.locator(".vite-error-overlay")).toHaveCount(0);
+});
+
+test("shows on-item removal only while Ctrl is held", async ({ page }) => {
+  await loadExample(page, 0);
+
+  expect(await page.getByRole("button", { name: /Contactdoos.*verwijderen/ }).count()).toBe(0);
+  await page.keyboard.down("Control");
+  const removeButton = page.getByRole("button", { name: /Contactdoos.*verwijderen/ }).first();
+  await expect(removeButton).toBeVisible();
+
+  const itemId = await removeButton.getAttribute("data-schema-remove-item-id");
+  const symbol = page.locator(`#right_col_inner [data-schema-item-id="${itemId}"]`).first();
+  const buttonBox = (await removeButton.boundingBox())!;
+  const symbolBox = (await symbol.boundingBox())!;
+  const centerX = buttonBox.x + buttonBox.width / 2;
+  const centerY = buttonBox.y + buttonBox.height / 2;
+  expect(centerX).toBeGreaterThanOrEqual(symbolBox.x);
+  expect(centerX).toBeLessThanOrEqual(symbolBox.x + symbolBox.width);
+  expect(centerY).toBeGreaterThanOrEqual(symbolBox.y);
+  expect(centerY).toBeLessThanOrEqual(symbolBox.y + symbolBox.height);
+
+  await removeButton.click();
+  await expect(page.locator(`#right_col_inner [data-schema-item-id="${itemId}"]`)).toHaveCount(0);
+  await page.keyboard.up("Control");
+  await expect(page.locator("[data-schema-remove-item-id]")).toHaveCount(0);
   await expect(page.locator(".vite-error-overlay")).toHaveCount(0);
 });
 

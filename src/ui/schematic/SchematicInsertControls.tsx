@@ -1,9 +1,10 @@
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { EditorStore } from "../../application/EditorStore";
 import type { HierarchyViewNode } from "../../application/SchemaDocumentReader";
 import type { SchemaStore } from "../../application/SchemaStore";
 import { useSchemaSnapshot } from "../useSchemaSnapshot";
-import { ui } from "../uiStyles";
+import { groupItemTypes } from "../hierarchy/GroupedItemTypeOptions";
+import { SchematicItemIcon } from "./SchematicItemIcon";
 
 type InsertMode = "before" | "end" | "start";
 
@@ -14,8 +15,10 @@ interface InsertTarget {
   readonly top: number;
 }
 
-interface ActiveInsert extends InsertTarget {
-  readonly selectedType: string;
+interface RemoveTarget {
+  readonly itemId: number;
+  readonly left: number;
+  readonly top: number;
 }
 
 interface SchematicInsertControlsProps {
@@ -95,33 +98,54 @@ export function SchematicInsertControls({
 }: SchematicInsertControlsProps) {
   const snapshot = useSchemaSnapshot(schemaStore);
   const [targets, setTargets] = useState<readonly InsertTarget[]>([]);
-  const [activeInsert, setActiveInsert] = useState<ActiveInsert | null>(null);
+  const [removeTargets, setRemoveTargets] = useState<readonly RemoveTarget[]>([]);
+  const [controlHeld, setControlHeld] = useState(false);
+  const [activeInsert, setActiveInsert] = useState<InsertTarget | null>(null);
+  const [search, setSearch] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [removeError, setRemoveError] = useState("");
   const nodesById = useMemo(
     () => new Map(snapshot.document.getAllItems().map((node) => [node.id, node])),
     [snapshot.document],
   );
   const activeNode = activeInsert ? nodesById.get(activeInsert.itemId) : undefined;
+  const availableTypes = activeInsert && activeNode ? insertionTypes(activeNode, activeInsert.mode) : [];
+  const filteredTypes = availableTypes.filter((type) => type.toLocaleLowerCase("nl-BE").includes(search.trim().toLocaleLowerCase("nl-BE")));
+  const groups = groupItemTypes(filteredTypes);
   const popoverPosition = activeInsert ? {
     left: Math.max(
       overlayElement.scrollLeft + 8,
       Math.min(
         activeInsert.left,
-        overlayElement.scrollLeft + overlayElement.clientWidth - 272,
+        overlayElement.scrollLeft + overlayElement.clientWidth - 432 - 8,
       ),
     ),
     top: Math.max(
-      overlayElement.scrollTop + 88,
+      overlayElement.scrollTop + 8,
       Math.min(
         activeInsert.top,
-        overlayElement.scrollTop + overlayElement.clientHeight - 88,
+        overlayElement.scrollTop + Math.max(8, overlayElement.clientHeight - 512 - 8),
       ),
     ),
   } : undefined;
 
+  useEffect(() => {
+    const updateControlKey = (event: KeyboardEvent): void => setControlHeld(event.ctrlKey);
+    const clearControlKey = (): void => setControlHeld(false);
+    window.addEventListener("keydown", updateControlKey);
+    window.addEventListener("keyup", updateControlKey);
+    window.addEventListener("blur", clearControlKey);
+    return () => {
+      window.removeEventListener("keydown", updateControlKey);
+      window.removeEventListener("keyup", updateControlKey);
+      window.removeEventListener("blur", clearControlKey);
+    };
+  }, []);
+
   useLayoutEffect(() => {
     function updateTargets(): void {
       const nextTargets: InsertTarget[] = [];
+      const nextRemoveTargets: RemoveTarget[] = [];
       const diagramElements = previewElement.querySelectorAll<SVGGraphicsElement>(
         "[data-schema-item-id]",
       );
@@ -134,6 +158,15 @@ export function SchematicInsertControls({
         positionedItemIds.add(itemId);
         const anchorX = Number(element.dataset.schemaAnchorX ?? 0);
         const anchorY = Number(element.dataset.schemaAnchorY ?? 0);
+
+        if (node.capabilities.canDelete && node.childIds.length === 0) {
+          const x = Number(element.dataset.schemaX ?? 0) + Number(element.dataset.schemaWidth ?? 0) / 2;
+          const y = Number(element.dataset.schemaY ?? 0) + Number(element.dataset.schemaHeight ?? 0) / 2;
+          nextRemoveTargets.push({
+            itemId,
+            ...diagramPoint(element, x, y, overlayElement, false),
+          });
+        }
 
         if (node.capabilities.canInsertBefore) {
           nextTargets.push({
@@ -163,6 +196,7 @@ export function SchematicInsertControls({
       }
 
       setTargets(spreadOverlappingTargets(nextTargets));
+      setRemoveTargets(nextRemoveTargets);
     }
 
     updateTargets();
@@ -183,17 +217,18 @@ export function SchematicInsertControls({
     if (!node) return;
     const allowedTypes = insertionTypes(node, target.mode);
     if (allowedTypes.length === 0) return;
-    setActiveInsert({ ...target, selectedType: allowedTypes[0] });
+    setActiveInsert(target);
+    setSearch("");
     setErrorMessage("");
   }
 
-  function addItem(): void {
+  function addItem(type: string): void {
     if (!activeInsert) return;
     try {
       const node = nodesById.get(activeInsert.itemId);
       const itemId = activeInsert.mode === "before"
-        ? schemaStore.commands.insertItemBefore(activeInsert.itemId, activeInsert.selectedType)
-        : schemaStore.commands.addItem(activeInsert.itemId, activeInsert.selectedType);
+        ? schemaStore.commands.insertItemBefore(activeInsert.itemId, type)
+        : schemaStore.commands.addItem(activeInsert.itemId, type);
       if (activeInsert.mode === "start" && node) {
         schemaStore.commands.moveItem(itemId, { targetParentId: node.id, position: 0 });
       }
@@ -216,9 +251,20 @@ export function SchematicInsertControls({
     }
   }
 
+  function removeItem(itemId: number): void {
+    try {
+      schemaStore.commands.deleteItem(itemId);
+      const validItemIds = new Set(schemaStore.getSnapshot().document.getAllItems().map((item) => item.id));
+      editorStore.commands.reconcileItemIds(validItemIds);
+      setRemoveError("");
+    } catch (error) {
+      setRemoveError(error instanceof Error ? error.message : "Het onderdeel kon niet worden verwijderd.");
+    }
+  }
+
   return (
     <div className="absolute inset-0" aria-label="Onderdelen toevoegen in het schema">
-      {targets.map((target) => {
+      {!controlHeld && targets.map((target) => {
         const node = nodesById.get(target.itemId);
         if (!node) return null;
         const action = target.mode === "before"
@@ -239,32 +285,72 @@ export function SchematicInsertControls({
         );
       })}
 
+      {controlHeld && removeTargets.map((target) => {
+        const node = nodesById.get(target.itemId);
+        if (!node) return null;
+        return (
+          <button
+            key={target.itemId}
+            type="button"
+            className="pointer-events-auto absolute z-1 flex size-6 -translate-1/2 cursor-pointer items-center justify-center rounded-full border-2 border-red-700 bg-white font-sans text-lg leading-none font-bold text-red-700 shadow-sm hover:bg-red-700 hover:text-white focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-red-700/30"
+            style={{ left: target.left, top: target.top }}
+            data-schema-remove-item-id={target.itemId}
+            aria-label={`${node.label} verwijderen`}
+            title={`${node.label} verwijderen`}
+            onClick={() => removeItem(target.itemId)}
+          >−</button>
+        );
+      })}
+      {removeError ? <p className="pointer-events-auto absolute left-2 top-2 z-10 rounded bg-white p-2 text-sm text-red-700 shadow" role="alert">{removeError}</p> : null}
+
       {activeInsert && activeNode ? (
         <div
-          className="pointer-events-auto absolute z-1 grid min-w-60 translate-x-3 -translate-y-1/2 gap-2.5 rounded-lg border border-neutral-400 bg-white p-3 text-neutral-800 shadow-xl"
+          className="pointer-events-auto absolute z-10 flex max-h-[min(32rem,calc(100vh-2rem))] w-[min(27rem,calc(100vw-2rem))] flex-col gap-2 rounded-xl border border-neutral-300 bg-white p-3 text-neutral-800 shadow-xl"
           role="dialog"
           aria-label="Onderdeel toevoegen"
           style={popoverPosition}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setActiveInsert(null);
+          }}
         >
-          <label className="grid gap-1 text-sm">
-            <span>Type onderdeel</span>
-            <select
-              className={ui.field}
-              value={activeInsert.selectedType}
-              onChange={(event) => setActiveInsert({
-                ...activeInsert,
-                selectedType: event.currentTarget.value,
-              })}
-            >
-              {insertionTypes(activeNode, activeInsert.mode)
-                .map((type) => <option key={type}>{type}</option>)}
-            </select>
-          </label>
-          {errorMessage ? <p className="m-0 text-sm text-red-700" role="alert">{errorMessage}</p> : null}
-          <div className="flex justify-end gap-2">
-            <button className={ui.primaryButton} type="button" onClick={addItem}>Toevoegen</button>
-            <button className={ui.button} type="button" onClick={() => setActiveInsert(null)}>Annuleren</button>
+          <div className="flex items-center justify-between gap-2">
+            <strong className="text-sm">Onderdeel toevoegen</strong>
+            <button className="rounded px-2 text-xl leading-none hover:bg-neutral-100" type="button" aria-label="Sluiten" onClick={() => setActiveInsert(null)}>×</button>
           </div>
+          <label className="sr-only" htmlFor="schematic-item-search">Zoek onderdeel</label>
+          <input
+            id="schematic-item-search"
+            className="min-h-9 rounded-md border border-neutral-300 px-2 text-sm focus-visible:outline-3 focus-visible:outline-blue-700/30"
+            type="search"
+            placeholder="Zoek een onderdeel…"
+            value={search}
+            onChange={(event) => setSearch(event.currentTarget.value)}
+            autoFocus
+          />
+          <div className="min-h-0 overflow-y-auto pr-1">
+            {groups.map((group) => (
+              <section key={group.label} className="mb-3" aria-label={group.label}>
+                <h3 className="mb-1 text-xs font-semibold text-neutral-600">{group.label}</h3>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {group.types.map((type) => (
+                    <button
+                      key={type}
+                      className="flex min-h-20 flex-col items-center justify-center gap-1 rounded-lg border border-neutral-200 bg-white p-1 text-center text-xs leading-tight hover:border-blue-600 hover:bg-blue-50 focus-visible:outline-3 focus-visible:outline-blue-700/30"
+                      type="button"
+                      aria-label={type}
+                      title={type}
+                      onClick={() => addItem(type)}
+                    >
+                      <SchematicItemIcon type={type} />
+                      <span className="max-w-full break-words">{type}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))}
+            {filteredTypes.length === 0 ? <p className="m-0 py-6 text-center text-sm text-neutral-600">Geen onderdelen gevonden.</p> : null}
+          </div>
+          {errorMessage ? <p className="m-0 text-sm text-red-700" role="alert">{errorMessage}</p> : null}
         </div>
       ) : null}
     </div>
