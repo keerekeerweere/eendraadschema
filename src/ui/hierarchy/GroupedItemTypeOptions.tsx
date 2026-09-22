@@ -6,7 +6,7 @@ const TYPE_GROUPS: readonly [label: string, types: ReadonlySet<string>][] = [
   ["Energie en beveiliging", new Set(["Batterij", "Elektriciteitsmeter", "EV lader", "Omvormer", "Overspanningsbeveiliging", "Transformator", "Zekering/differentieel", "Zonnepaneel"])],
 ];
 
-export function GroupedItemTypeOptions({ types }: { readonly types: readonly string[] }) {
+export function groupItemTypes(types: readonly string[]): readonly { label: string; types: readonly string[] }[] {
   const remaining = new Set(types);
   const groups = TYPE_GROUPS.flatMap(([label, candidates]) => {
     const matches = types.filter((type) => candidates.has(type));
@@ -15,7 +15,11 @@ export function GroupedItemTypeOptions({ types }: { readonly types: readonly str
   });
   if (remaining.size > 0) groups.push({ label: "Overige symbolen", types: [...remaining] });
 
-  return <>{groups.map((group) => (
+  return groups;
+}
+
+export function GroupedItemTypeOptions({ types }: { readonly types: readonly string[] }) {
+  return <>{groupItemTypes(types).map((group) => (
     <optgroup key={group.label} label={group.label}>
       {group.types.map((type) => <option key={type} value={type}>{type}</option>)}
     </optgroup>

@@ -66,8 +66,9 @@ describe("SchematicInsertControls", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /na Contactdoos 1 toevoegen/ }));
     const dialog = screen.getByRole("dialog", { name: "Onderdeel toevoegen" });
-    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Lichtpunt" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Toevoegen" }));
+    const lightButton = within(dialog).getByRole("button", { name: "Lichtpunt" });
+    expect(lightButton.querySelector("svg use")?.getAttribute("href")).toBe("#lamp");
+    fireEvent.click(lightButton);
 
     const child = store.getSnapshot().document.getChildren(socketId)[0];
     expect(child.type).toBe("Lichtpunt");
@@ -79,8 +80,7 @@ describe("SchematicInsertControls", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /vóór Contactdoos 1 invoegen/ }));
     const dialog = screen.getByRole("dialog", { name: "Onderdeel toevoegen" });
-    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Lichtpunt" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Toevoegen" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Lichtpunt" }));
 
     const inserted = store.getSnapshot().document.getChildren(circuitId)[0];
     expect(inserted.type).toBe("Lichtpunt");
@@ -95,11 +95,46 @@ describe("SchematicInsertControls", () => {
     const out2 = ports.find(port => port.label === "OUT2")!;
 
     fireEvent.click(screen.getByRole("button", { name: "Onderdeel na OUT1 toevoegen" }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Toevoegen" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Kring" }));
     fireEvent.click(screen.getByRole("button", { name: "Onderdeel na OUT2 toevoegen" }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Toevoegen" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Kring" }));
 
     expect(store.getSnapshot().document.getChildren(out1.id)[0]?.type).toBe("Kring");
     expect(store.getSnapshot().document.getChildren(out2.id)[0]?.type).toBe("Kring");
+  });
+
+  it("filters available item icons by name", () => {
+    renderControls();
+
+    fireEvent.click(screen.getByRole("button", { name: /na Contactdoos 1 toevoegen/ }));
+    const dialog = screen.getByRole("dialog", { name: "Onderdeel toevoegen" });
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Zoek onderdeel" }), {
+      target: { value: "licht" },
+    });
+
+    expect(within(dialog).getByRole("button", { name: "Lichtpunt" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Contactdoos" })).not.toBeInTheDocument();
+  });
+
+  it("reveals an on-item minus only while Ctrl is held and deletes a leaf", () => {
+    const { store, editorStore, circuitId, socketId } = renderControls();
+    editorStore.commands.selectItem(socketId);
+
+    expect(screen.queryByRole("button", { name: "Contactdoos 1 verwijderen" })).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Control", ctrlKey: true });
+
+    expect(screen.getByRole("button", { name: "Contactdoos 1 verwijderen" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Kring.*verwijderen/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Bord.*verwijderen/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Contactdoos 1 verwijderen" }));
+    expect(store.getSnapshot().document.getItem(socketId)).toBeUndefined();
+    expect(store.getSnapshot().document.getItem(circuitId)).toBeDefined();
+    expect(editorStore.getSnapshot().selectedItemId).toBeNull();
+
+    store.commands.undo();
+    expect(store.getSnapshot().document.getItem(socketId)).toBeDefined();
+    fireEvent.keyUp(window, { key: "Control", ctrlKey: false });
+    expect(screen.queryByRole("button", { name: "Contactdoos 1 verwijderen" })).not.toBeInTheDocument();
   });
 });

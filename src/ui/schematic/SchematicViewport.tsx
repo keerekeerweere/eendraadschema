@@ -20,7 +20,7 @@ export function SchematicViewport({ renderStore, buildDate }: SchematicViewportP
     <section aria-label="Eéndraadschema" className="grid min-h-full content-start gap-4 p-2.5 text-black">
       <p className="m-0 text-sm text-neutral-700">
         <strong>Tekening: </strong>
-        Gebruik de plusknoppen op de lijnen om een onderdeel tussen twee symbolen of aan het einde van een tak toe te voegen. Gebruik Print om de tekening af te drukken of als SVG te exporteren.
+        Gebruik de plusknoppen op de lijnen om een onderdeel tussen twee symbolen of aan het einde van een tak toe te voegen. Houd Ctrl ingedrukt om een verwijderknop op onderdelen zonder kinderen te tonen. Gebruik Print om de tekening af te drukken of als SVG te exporteren.
       </p>
       <div
         id="EDS"

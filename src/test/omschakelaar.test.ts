@@ -22,6 +22,31 @@ function expectInvalidChange(action: () => unknown) {
   } satisfies Partial<SchemaCommandError>));
 }
 
+function expectManhattanRoute(component: Element, port: string): void {
+  const contact = component.querySelector(`[data-switch-contact="${port}"]`)!;
+  const branch = component.querySelector(`[data-branch-origin="${port}"]`)!;
+  const segments = Array.from(component.querySelectorAll(`line[data-output-conductor="${port}"]`));
+  expect(segments).toHaveLength(3);
+  const point = (segment: Element, end: 1 | 2) => ({
+    x: Number(segment.getAttribute(`x${end}`)),
+    y: Number(segment.getAttribute(`y${end}`)),
+  });
+  expect(point(segments[0], 1)).toEqual({
+    x: Number(contact.getAttribute("cx")),
+    y: Number(contact.getAttribute("cy")),
+  });
+  for (const [index, segment] of segments.entries()) {
+    const start = point(segment, 1);
+    const end = point(segment, 2);
+    expect(start.x === end.x || start.y === end.y).toBe(true);
+    if (index > 0) expect(start).toEqual(point(segments[index - 1], 2));
+  }
+  expect(point(segments[2], 2)).toEqual({
+    x: Number(branch.getAttribute("data-x")),
+    y: Number(branch.getAttribute("data-y")),
+  });
+}
+
 describe("Omschakelaar", () => {
   it("registers a public switch and an internal connector with safe defaults", () => {
     const structure = new Hierarchical_List();
@@ -397,15 +422,18 @@ describe("Omschakelaar", () => {
     for (const port of ["OUT1", "OUT2"]) {
       const contact = component.querySelector(`[data-switch-contact="${port}"]`)!;
       const conductor = component.querySelector(`[data-output-conductor="${port}"]`)!;
+      const route = component.querySelectorAll(`[data-output-conductor="${port}"]`);
+      const lastSegment = route[route.length - 1];
       const branch = component.querySelector(`[data-branch-origin="${port}"]`)!;
       const anchor = component.querySelector(`[data-explicit-port-anchor="${port}"]`)!;
       expect(conductor.getAttribute("x1")).toBe(contact.getAttribute("cx"));
       expect(conductor.getAttribute("y1")).toBe(contact.getAttribute("cy"));
       expect(conductor.getAttribute("stroke-linecap")).toBe("round");
-      expect(branch.getAttribute("data-x")).toBe(conductor.getAttribute("x2"));
-      expect(branch.getAttribute("data-y")).toBe(conductor.getAttribute("y2"));
-      expect(anchor.getAttribute("data-schema-end-x")).toBe(conductor.getAttribute("x2"));
-      expect(anchor.getAttribute("data-schema-anchor-y")).toBe(conductor.getAttribute("y2"));
+      expect(branch.getAttribute("data-x")).toBe(lastSegment.getAttribute("x2"));
+      expect(branch.getAttribute("data-y")).toBe(lastSegment.getAttribute("y2"));
+      expect(anchor.getAttribute("data-schema-end-x")).toBe(lastSegment.getAttribute("x2"));
+      expect(anchor.getAttribute("data-schema-anchor-y")).toBe(lastSegment.getAttribute("y2"));
+      expectManhattanRoute(component, port);
     }
   });
 
@@ -490,6 +518,101 @@ describe("Omschakelaar", () => {
       expect(Number(contact.getAttribute("cx")) % 1).toBe(0);
       expect(Number(contact.getAttribute("cy")) % 1).toBe(0);
     }
+  });
+
+  it("keeps the vertical switch contacts at their original spacing as port branches grow", () => {
+    const { store, circuitId } = createCircuitStore();
+    const switchId = store.commands.addItem(circuitId, "Omschakelaar");
+    const ports = store.getSnapshot().document.getChildren(switchId);
+    const contactXs = () => {
+      const svg = new DOMParser().parseFromString(
+        store.getLegacyDocument().toSVG(0, "horizontal").data,
+        "image/svg+xml",
+      );
+      const component = svg.querySelector('[data-component="omschakelaar"]')!;
+      return ["OUT1", "IN", "OUT2"].map(port =>
+        Number(component.querySelector(`[data-switch-contact="${port}"]`)!.getAttribute("cx")));
+    };
+    const original = contactXs();
+
+    const out1Circuit = store.commands.addItem(ports[0].id, "Kring");
+    store.commands.addItem(out1Circuit, "Contactdoos");
+    const inCircuit = store.commands.addItem(ports[1].id, "Kring");
+    store.commands.addItem(inCircuit, "Wasmachine");
+    const out2Circuit = store.commands.addItem(ports[2].id, "Kring");
+    store.commands.addItem(out2Circuit, "Lichtpunt");
+
+    expect(contactXs()).toEqual(original);
+    const document = new DOMParser().parseFromString(
+      store.getLegacyDocument().toSVG(0, "horizontal").data,
+      "image/svg+xml",
+    );
+    const component = document.querySelector('[data-component="omschakelaar"]')!;
+    for (const port of ["OUT1", "IN", "OUT2"]) expectManhattanRoute(component, port);
+    const inRoute = component.querySelectorAll('line[data-output-conductor="IN"]');
+    const out1Route = component.querySelectorAll('line[data-output-conductor="OUT1"]');
+    const out2Route = component.querySelectorAll('line[data-output-conductor="OUT2"]');
+    const out2Label = Array.from(component.querySelectorAll("text")).find(text => text.textContent === "OUT2")!;
+    const layerY = (segments: NodeListOf<Element>) => Number(segments[1].getAttribute("y1"));
+    expect(Number(inRoute[0].getAttribute("y1")) - Number(inRoute[0].getAttribute("y2")))
+      .toBeGreaterThanOrEqual(60);
+    expect(layerY(inRoute) - layerY(out1Route)).toBeGreaterThanOrEqual(12);
+    expect(layerY(out2Route) - layerY(inRoute)).toBeGreaterThanOrEqual(12);
+    expect(layerY(out2Route)).toBeLessThan(Number(out2Label.getAttribute("y")) - 10);
+
+    const preview = new DOMParser().parseFromString(
+      flattenSVGfromString(store.getLegacyDocument().toSVG(0, "horizontal").data),
+      "image/svg+xml",
+    );
+    const previewSwitch = preview.querySelector(`g[data-schema-item-id="${switchId}"]`)!;
+    for (const port of ["OUT1", "IN", "OUT2"]) {
+      const segments = Array.from(previewSwitch.querySelectorAll(`line[data-output-conductor="${port}"]`));
+      expect(segments).toHaveLength(3);
+      for (const segment of segments) {
+        expect(
+          segment.getAttribute("x1") === segment.getAttribute("x2")
+          || segment.getAttribute("y1") === segment.getAttribute("y2"),
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("keeps the horizontal switch contacts at their original spacing as port branches grow", () => {
+    const structure = new Hierarchical_List();
+    const connection = structure.addItem("Aansluiting");
+    const store = new LegacySchemaStore(structure);
+    const switchId = store.commands.addItem(connection.id, "Omschakelaar");
+    const ports = store.getSnapshot().document.getChildren(switchId);
+    const contactYs = () => {
+      const svg = new DOMParser().parseFromString(
+        store.getLegacyDocument().toSVG(0, "horizontal").data,
+        "image/svg+xml",
+      );
+      const component = svg.querySelector('[data-component="omschakelaar"]')!;
+      return ["OUT1", "IN", "OUT2"].map(port =>
+        Number(component.querySelector(`[data-switch-contact="${port}"]`)!.getAttribute("cy")));
+    };
+    const original = contactYs();
+
+    const out1Circuit = store.commands.addItem(ports[0].id, "Kring");
+    store.commands.addItem(out1Circuit, "Contactdoos");
+    const inCircuit = store.commands.addItem(ports[1].id, "Kring");
+    store.commands.addItem(inCircuit, "Wasmachine");
+    const out2Circuit = store.commands.addItem(ports[2].id, "Kring");
+    store.commands.addItem(out2Circuit, "Lichtpunt");
+
+    expect(contactYs()).toEqual(original);
+    const document = new DOMParser().parseFromString(
+      store.getLegacyDocument().toSVG(0, "horizontal").data,
+      "image/svg+xml",
+    );
+    const component = document.querySelector('[data-component="omschakelaar"]')!;
+    for (const port of ["OUT1", "IN", "OUT2"]) expectManhattanRoute(component, port);
+    const layerX = (port: string) => Number(component.querySelectorAll(`line[data-output-conductor="${port}"]`)[1].getAttribute("x1"));
+    expect(layerX("IN") - layerX("OUT2")).toBeGreaterThanOrEqual(12);
+    expect(layerX("OUT1") - layerX("IN")).toBeGreaterThanOrEqual(12);
+    const branchX = Number(component.querySelector('[data-branch-origin="OUT1"]')!.getAttribute("data-x"));
+    expect(branchX - layerX("OUT1")).toBeGreaterThanOrEqual(8);
   });
 
   it("keeps the input axis aligned when the circuit has a preceding sibling", () => {

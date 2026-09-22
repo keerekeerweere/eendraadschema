@@ -190,6 +190,15 @@ Earlier React/property-editor commits immediately precede these in branch histor
 - Do not let deleting an ancestor silently remove a feeder circuit or board root.
 - Do not use pixel-perfect SVG snapshots where structural labels, relationships and element counts are sufficient.
 - Do not claim browser validation succeeded when only jsdom/RTL tests ran.
+- **The live preview renders `flattenSVG()` output, not raw `toSVG()`.** `SchematicRenderStore` runs every
+  item's SVG through `flattenSVGfromString` (`src/general.ts`), which bakes nested `<svg x= y=>` offsets into
+  each leaf element's own coordinates. It only handled `svg`, `line`, `use`, `rect`, `circle`, `text` and
+  `polygon`; any other element (notably a wrapping `<g>`) was serialized verbatim and silently lost every
+  ancestor offset. The `Omschakelaar` item wraps its drawing in a `<g>`, so its conductors stayed at pre-shift
+  coordinates and did not line up with the parent Kring's cable. The fix (`flattenSVG` recurses into `<g>` and
+  shifts `data-schema-anchor-*` attributes carried on it) lives on `feature/omschakelaar`. Tests that assert
+  alignment must run `flattenSVGfromString(document.toSVG(0, "horizontal").data)`, never only the raw
+  `toSVG()` output, and any new element type in an item's SVG needs a case in `flattenSVG`.
 
 ## MCP-driven document edits (agent/`propose_change_set` sessions)
 

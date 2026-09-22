@@ -17,6 +17,9 @@ import { SVGelement } from "../SVGelement";
  * wire (the switch's tree parent) additionally attaches to.
  */
 const SLOT_ORDER: readonly OmschakelaarPort[] = OMSCHAKELAAR_SLOT_ORDER;
+// Route each port on a separate lane beyond the fixed-size switch contacts.
+const VERTICAL_ROUTE_LEVEL: Readonly<Record<OmschakelaarPort, number>> = { OUT1: 8, IN: 22, OUT2: 36 };
+const HORIZONTAL_ROUTE_LANE_X: Readonly<Record<OmschakelaarPort, number>> = { OUT1: 124, IN: 108, OUT2: 92 };
 
 interface Slot {
   readonly port: OmschakelaarPort;
@@ -109,15 +112,21 @@ export class Omschakelaar extends Electro_Item {
     const upperY = Math.max(22, top.svg.yup);
     const centerY = upperY + Math.max(19, top.svg.ydown + middle.svg.yup + 14);
     const lowerY = centerY + Math.max(19, middle.svg.ydown + bottom.svg.yup + 14);
-    const rowY: Record<OmschakelaarPort, number> = { OUT1: upperY, IN: centerY, OUT2: lowerY };
-    const endpointX = contactX + 30 + Math.max(...slots.map(slot => slot.svg.xleft));
-    const labelBottom = lowerY + (address === "" ? 24 : 38);
+    const contactY: Record<OmschakelaarPort, number> = { OUT1: 22, IN: 41, OUT2: 60 };
+    // Leave a routing bay to the right of the fixed contacts before branch content begins.
+    const endpointX = contactX + 80 + Math.max(...slots.map(slot => slot.svg.xleft));
+    const labelBottom = contactY.OUT2 + (address === "" ? 24 : 38);
+    const branchBottom = Math.max(
+      upperY + top.svg.ydown,
+      centerY + middle.svg.ydown,
+      lowerY + bottom.svg.ydown,
+    );
     const width = Math.max(
       ...slots.map(slot => endpointX + slot.svg.xright),
       88 + svgTextWidth(htmlspecialchars(address), 10, ""),
     );
-    const parentY = rowY[parentPort];
-    const contact = (port: OmschakelaarPort): Point => ({ x: port === "IN" ? commonX : contactX, y: rowY[port] });
+    const parentY = contactY[parentPort];
+    const contact = (port: OmschakelaarPort): Point => ({ x: port === "IN" ? commonX : contactX, y: contactY[port] });
     const layout: Layout = {
       orientation: "horizontal",
       parentPort,
@@ -128,14 +137,14 @@ export class Omschakelaar extends Electro_Item {
         OUT2: { x: endpointX, y: lowerY },
       },
       parentConductor: { from: { x: 1, y: parentY }, to: contact(parentPort) },
-      arm: { from: { x: commonX, y: centerY }, to: { x: commonX + 20, y: centerY } },
+      arm: { from: { x: commonX, y: contactY.IN }, to: { x: commonX + 20, y: contactY.IN } },
       portLabels: {
-        OUT1: { x: contactX + 7, y: upperY - 5, anchor: "start" },
-        IN: { x: 5, y: centerY - 7, anchor: "start" },
-        OUT2: { x: contactX + 7, y: lowerY - 5, anchor: "start" },
+        OUT1: { x: contactX + 7, y: contactY.OUT1 - 5, anchor: "start" },
+        IN: { x: 5, y: contactY.IN - 7, anchor: "start" },
+        OUT2: { x: contactX + 7, y: contactY.OUT2 - 5, anchor: "start" },
       },
-      rating: { x: 44, y: lowerY + 15 },
-      address: { x: 44, y: lowerY + 29 },
+      rating: { x: 44, y: contactY.OUT2 + 15 },
+      address: { x: 44, y: contactY.OUT2 + 29 },
       metadataAnchor: "middle",
       incomingY: parentY,
     };
@@ -143,7 +152,7 @@ export class Omschakelaar extends Electro_Item {
     svg.xleft = 1;
     svg.xright = width - svg.xleft;
     svg.yup = parentY;
-    svg.ydown = labelBottom - parentY;
+    svg.ydown = Math.max(labelBottom, branchBottom) - parentY;
     svg.data = this.renderComponent(layout, slots, ratingLabel, address);
     return svg;
   }
@@ -156,13 +165,14 @@ export class Omschakelaar extends Electro_Item {
   ): SVGelement {
     const [left, middle, right] = slots;
     const endpointY = Math.max(18, ...slots.map(slot => slot.svg.yup));
-    const contactY = endpointY + 24;
+    // The space below the branches holds three horizontal routing layers and the port labels.
+    const contactY = endpointY + 64;
     const commonY = contactY + 34;
     const leftX = Math.round(Math.max(34, left.svg.xleft));
     const centerX = Math.round(leftX + Math.max(36, left.svg.xright + middle.svg.xleft + 28));
     const rightX = Math.round(centerX + Math.max(36, middle.svg.xright + right.svg.xleft + 28));
-    const columnX: Record<OmschakelaarPort, number> = { OUT1: leftX, IN: centerX, OUT2: rightX };
-    const parentX = columnX[parentPort];
+    const contactX: Record<OmschakelaarPort, number> = { OUT1: 34, IN: 70, OUT2: 106 };
+    const parentX = contactX[parentPort];
     // The port label ("IN"/"OUT1"/"OUT2") sits on its own line next to its
     // contact; the rating/address labels start a full line below it so long
     // text like "63A 4P" never collides with the port label.
@@ -180,7 +190,7 @@ export class Omschakelaar extends Electro_Item {
       rightX + right.svg.xright,
       labelX + labelWidth,
     );
-    const contact = (port: OmschakelaarPort): Point => ({ x: columnX[port], y: port === "IN" ? commonY : contactY });
+    const contact = (port: OmschakelaarPort): Point => ({ x: contactX[port], y: port === "IN" ? commonY : contactY });
     const layout: Layout = {
       orientation: "vertical",
       parentPort,
@@ -191,11 +201,11 @@ export class Omschakelaar extends Electro_Item {
         OUT2: { x: rightX, y: endpointY },
       },
       parentConductor: { from: { x: parentX, y: incomingY }, to: contact(parentPort) },
-      arm: { from: { x: centerX, y: commonY }, to: { x: centerX, y: commonY - 18 } },
+      arm: { from: { x: contactX.IN, y: commonY }, to: { x: contactX.IN, y: commonY - 18 } },
       portLabels: {
-        OUT1: { x: leftX, y: contactY - 7, anchor: "middle" },
-        IN: { x: centerX + 7, y: commonY + 4, anchor: "start" },
-        OUT2: { x: rightX, y: contactY - 7, anchor: "middle" },
+        OUT1: { x: contactX.OUT1, y: contactY - 7, anchor: "middle" },
+        IN: { x: contactX.IN + 7, y: commonY + 4, anchor: "start" },
+        OUT2: { x: contactX.OUT2, y: contactY - 7, anchor: "middle" },
       },
       rating: { x: labelX, y: ratingY },
       address: { x: labelX, y: addressY },
@@ -227,8 +237,17 @@ export class Omschakelaar extends Electro_Item {
     for (const slot of slots) {
       const escapedPort = htmlspecialchars(slot.port);
       const contact = layout.contacts[slot.port];
+      const end = layout.ends[slot.port];
+      const firstBend = layout.orientation === "vertical"
+        ? { x: contact.x, y: end.y + VERTICAL_ROUTE_LEVEL[slot.port] }
+        : { x: HORIZONTAL_ROUTE_LANE_X[slot.port], y: contact.y };
+      const secondBend = layout.orientation === "vertical"
+        ? { x: end.x, y: firstBend.y }
+        : { x: firstBend.x, y: end.y };
       data += `<circle data-switch-contact="${escapedPort}" cx="${contact.x}" cy="${contact.y}" r="2.5" fill="black" />`;
-      data += line(`data-output-conductor="${escapedPort}"`, contact, layout.ends[slot.port]);
+      data += line(`data-output-conductor="${escapedPort}"`, contact, firstBend);
+      data += line(`data-output-conductor="${escapedPort}"`, firstBend, secondBend);
+      data += line(`data-output-conductor="${escapedPort}"`, secondBend, end);
     }
 
     data += `<line data-selector-arm="true" x1="${layout.arm.from.x}" y1="${layout.arm.from.y}" x2="${layout.arm.to.x}" y2="${layout.arm.to.y}" stroke="black" />`;
