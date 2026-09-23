@@ -4,4 +4,5 @@ coverage/
 test-results/
 playwright-report/
 .worktrees/
+.local-sessions/
 PDF_SCHEMA_IMPORT.md
